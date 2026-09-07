@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log In — Bellhop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="login.css?v=5">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-side">
+    <button type="button" class="btn btn-ghost btn-home" id="homeBtn">← Home</button>
+  </div>
+  <div class="header-center">
+    <div class="brand"><span class="brand-mark">⏱</span> Bell<span class="accent-green">hop</span></div>
+    <p class="tagline">your week, sorted <span class="dot-red">•</span></p>
+  </div>
+  <div class="header-side header-side-right"></div>
+</header>
+
+<main class="login-shell">
+  <section class="card login-card">
+    <div class="mode-tabs" id="modeTabs">
+      <button type="button" class="mode-tab active" data-mode="login">Log in</button>
+      <button type="button" class="mode-tab" data-mode="signup">Sign up</button>
+    </div>
+
+    <h1 id="loginHeading">Welcome back 👋</h1>
+    <p class="login-sub" id="loginSub">Log in to build and check your timetable.</p>
+
+    <form id="loginForm" class="login-form" autocomplete="off">
+      <div class="field">
+        <label for="username">Name</label>
+        <input type="text" id="username" placeholder="e.g. Vivaan" required maxlength="30" autocomplete="username">
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="At least 8 characters" required autocomplete="current-password">
+      </div>
+
+      <div class="field" id="confirmField" hidden>
+        <label for="confirm">Confirm password</label>
+        <input type="password" id="confirm" placeholder="Type it again" autocomplete="new-password">
+      </div>
+
+      <p class="form-msg form-msg-error" id="formError" hidden></p>
+      <p class="form-msg form-msg-ok" id="formOk" hidden></p>
+
+      <button type="submit" class="btn btn-primary btn-full" id="submitBtn">Log In</button>
+    </form>
+
+    <p class="login-note">
+      <strong>How this works:</strong> your password is run through PBKDF2 (150,000 rounds, SHA-256,
+      with a random salt) and only that hash is saved — the password itself is never stored.
+      Everything lives in this browser, so there's no server and no database.
+      That means someone with access to this device and its developer tools could still get past it,
+      and your account won't follow you to another device or browser.
+      It's a school project, so please don't reuse a real password.
+    </p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>© 2026 Bellhop. Built by Vivaan Saraf.</p>
+</footer>
+
+<script src="login.js?v=5"></script>
+</body>
+</html>
