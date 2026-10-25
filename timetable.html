@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bellhop — Your Week, Sorted</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=5">
+<script>
+  // Send visitors to the login page unless they hold an unexpired session.
+  try{
+    const raw = localStorage.getItem('timetable-session');
+    const session = raw ? JSON.parse(raw) : null;
+    if(!session || !session.expiresAt || Date.now() > session.expiresAt){
+      localStorage.removeItem('timetable-session');
+      window.location.replace('login.html');
+    }
+  }catch(e){
+    window.location.replace('login.html');
+  }
+</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-side">
+    <button type="button" class="btn btn-ghost btn-home" id="homeBtn">← Home</button>
+  </div>
+  <div class="header-center">
+    <div class="brand">
+      <span class="brand-mark">⏱</span> Bell<span class="accent-green">hop</span>
+    </div>
+    <p class="tagline">your week, sorted <span class="dot-red">•</span></p>
+  </div>
+  <div class="header-side header-side-right">
+    <span class="user-greet" id="userGreet"></span>
+    <button type="button" class="btn btn-ghost btn-logout" id="logoutBtn">Log out</button>
+  </div>
+</header>
+
+<div class="page-shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <section class="card add-card" aria-labelledby="add-heading">
+      <h2 id="add-heading">➕ Add a class</h2>
+      <form id="classForm" class="class-form">
+        <div class="field">
+          <label for="subject">Subject</label>
+          <input type="text" id="subject" placeholder="e.g. Chemistry" required maxlength="40">
+        </div>
+
+        <div class="field">
+          <label for="day">Day</label>
+          <select id="day" required>
+            <option value="" disabled selected>Pick a day</option>
+            <option>Monday</option>
+            <option>Tuesday</option>
+            <option>Wednesday</option>
+            <option>Thursday</option>
+            <option>Friday</option>
+            <option>Saturday</option>
+            <option>Sunday</option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="start">Start</label>
+            <input type="time" id="start" required>
+          </div>
+          <div class="field">
+            <label for="end">End</label>
+            <input type="time" id="end" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="room">Room / Location</label>
+          <input type="text" id="room" placeholder="e.g. Room 204 (optional)" maxlength="40">
+        </div>
+
+        <div class="field">
+          <label for="color">Colour tag</label>
+          <div class="color-picker" id="colorPicker">
+            <button type="button" class="swatch swatch-green selected" data-color="green" aria-label="Green"></button>
+            <button type="button" class="swatch swatch-red" data-color="red" aria-label="Red"></button>
+            <button type="button" class="swatch swatch-white" data-color="white" aria-label="White"></button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Add to timetable</button>
+      </form>
+    </section>
+
+    <section class="card next-card" aria-labelledby="next-heading">
+      <h2 id="next-heading">⏭ Next up</h2>
+      <div id="nextUp" class="next-up">
+        <p class="empty-state">Add some classes to see what's next.</p>
+      </div>
+    </section>
+  </aside>
+
+  <!-- TIMETABLE -->
+  <main class="card timetable-card" id="timetable" aria-labelledby="tt-heading">
+    <div class="tt-header">
+      <h2 id="tt-heading">📅 Your Timetable</h2>
+      <div class="tt-actions">
+        <button id="clearAllBtn" class="btn btn-ghost" type="button">Clear all</button>
+      </div>
+    </div>
+
+    <div class="day-tabs" id="dayTabs">
+      <button class="day-tab active" data-day="Monday">Mon</button>
+      <button class="day-tab" data-day="Tuesday">Tue</button>
+      <button class="day-tab" data-day="Wednesday">Wed</button>
+      <button class="day-tab" data-day="Thursday">Thu</button>
+      <button class="day-tab" data-day="Friday">Fri</button>
+      <button class="day-tab" data-day="Saturday">Sat</button>
+      <button class="day-tab" data-day="Sunday">Sun</button>
+    </div>
+
+    <div id="weekGrid" class="week-grid">
+      <div class="day-col" data-day="Monday">
+        <h3 class="day-col-head">Monday</h3>
+        <div class="day-col-list"></div>
+      </div>
+      <div class="day-col" data-day="Tuesday">
+        <h3 class="day-col-head">Tuesday</h3>
+        <div class="day-col-list"></div>
+      </div>
+      <div class="day-col" data-day="Wednesday">
+        <h3 class="day-col-head">Wednesday</h3>
+        <div class="day-col-list"></div>
+      </div>
+      <div class="day-col" data-day="Thursday">
+        <h3 class="day-col-head">Thursday</h3>
+        <div class="day-col-list"></div>
+      </div>
+      <div class="day-col" data-day="Friday">
+        <h3 class="day-col-head">Friday</h3>
+        <div class="day-col-list"></div>
+      </div>
+      <div class="day-col" data-day="Saturday">
+        <h3 class="day-col-head">Saturday</h3>
+        <div class="day-col-list"></div>
+      </div>
+      <div class="day-col" data-day="Sunday">
+        <h3 class="day-col-head">Sunday</h3>
+        <div class="day-col-list"></div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <p>Made for students, by students' problems. Stay on time! ✅</p>
+</footer>
+
+<script src="script.js?v=5"></script>
+</body>
+</html>
