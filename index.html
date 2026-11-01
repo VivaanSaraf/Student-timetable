@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
-<link rel="stylesheet" href="landing.css?v=5">
+<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="landing.css?v=9">
 </head>
 <body class="landing">
 
@@ -16,14 +16,14 @@
 <header class="topbar">
   <div class="topbar-brand">
     <span class="topbar-logo"><span class="brand-mark">⏱</span> Bell<span class="accent-green">hop</span></span>
-    <span class="topbar-tag">Your Schedule, On Hand</span>
+    <span class="topbar-tag">Know where you're going.</span>
   </div>
 
   <nav class="topbar-nav" id="topbarNav">
-    <a href="#problem">Problem</a>
-    <a href="#solution">Solution</a>
-    <a href="#who">Who it's for</a>
-    <a href="login.html" class="btn btn-primary btn-nav">Make Your Timetable</a>
+    <a href="#problem">Sound familiar?</a>
+    <a href="#solution">The idea</a>
+    <a href="#built-by">Built by</a>
+    <a href="login.html" data-timetable-link class="btn btn-primary btn-nav">Make Your Timetable</a>
   </nav>
 
   <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
@@ -34,37 +34,48 @@
 <!-- HERO -->
 <section class="hero">
   <h1>Your Timetable,<br>In Your <span class="accent-green">Pocket.</span></h1>
-  <p class="hero-sub">A simple handheld device that shows MYP students their next class — no phone, no app, no more running late.</p>
-  <a href="login.html" class="btn btn-primary btn-lg">Make Your Timetable</a>
+  <p class="hero-sub">What's next, and which room? Bellhop is a small handheld device for checking your classes without taking out your phone.</p>
+  <a href="login.html" data-timetable-link class="btn btn-primary btn-lg">Make Your Timetable</a>
 </section>
 
 <!-- PROBLEM -->
 <section id="problem" class="section problem-section">
-  <div class="section-inner">
-    <p class="section-tag red-tag">Uh Oh 😬</p>
+  <div class="section-inner problem-inner">
+    <p class="section-tag red-tag">Sound familiar?</p>
     <h2>Wrong room. Again.</h2>
     <p class="section-text">
-      Ever full-on sprinted through the hallway praying you don't wipe out in front of everyone?
-      Or strolled in ten minutes late with your best "sorry, got lost" face on?
+      The bell goes. Everyone heads off. You're still trying to work out where your next class is.
     </p>
-    <p class="section-text">
-      MYP students lose track of their next class ALL the time — the room, the time, all of it —
-      and every passing period turns into a coin flip: mad dash, or walk-of-shame late.
-    </p>
+    <div class="experience-grid">
+      <article class="experience-card">
+        <span class="experience-number">01</span>
+        <h3>Right subject. Wrong room.</h3>
+        <p>You turn up at the usual classroom. It's empty. Today's lesson is on another floor.</p>
+      </article>
+      <article class="experience-card">
+        <span class="experience-number">02</span>
+        <h3>You follow your friends.</h3>
+        <p>Halfway there, you remember you're in different classes. Time to turn around.</p>
+      </article>
+      <article class="experience-card">
+        <span class="experience-number">03</span>
+        <h3>Now you're late.</h3>
+        <p>You rush through a busy hallway or walk in after the lesson starts and explain what happened. Neither feels great.</p>
+      </article>
+    </div>
   </div>
 </section>
 
 <!-- SOLUTION -->
 <section id="solution" class="section solution-section">
   <div class="section-inner">
-    <p class="section-tag green-tag">Say Hello To</p>
-    <h2>Bellhop 👋</h2>
+    <p class="section-tag green-tag">The idea</p>
+    <h2>A quick look. Then off you go.</h2>
     <p class="section-text">
-      A tiny handheld gadget that shows your whole schedule at a glance. No app to open,
-      no phone to dig out of your bag, nothing to remember.
+      Put your timetable into Bellhop. The handheld device shows your next subject, room and start time, so you can check it between lessons.
     </p>
     <p class="section-text">
-      Just glance, go, and actually make it there on time — like a legend.
+      No phone or app needed to check. Just pick it up, have a look and head to class.
     </p>
   </div>
 </section>
@@ -73,26 +84,37 @@
 <section id="who" class="section who-section">
   <div class="section-inner narrow">
     <p class="section-tag">Built For</p>
-    <h2>MYP students, obviously.</h2>
+    <h2>For MYP students.</h2>
     <p class="section-text">
-      Made by a student who's done the hallway 100m dash one too many times —
-      for every other MYP kid tired of guessing where they're supposed to be.
+      Different subjects, different rooms, a timetable that changes. Bellhop helps you keep track of it all.
     </p>
+  </div>
+</section>
+
+<section id="built-by" class="section built-by-section">
+  <div class="section-inner builder-layout">
+    <div class="builder-mark" aria-hidden="true">VS<span>↗</span></div>
+    <div>
+      <p class="section-tag green-tag">Built by</p>
+      <h2>Vivaan Saraf</h2>
+      <p class="builder-role">MYP student · Creator of Bellhop</p>
+      <p class="section-text">I'm building Bellhop to make checking your timetable easier. It starts with a simple question: where do I need to be next?</p>
+    </div>
   </div>
 </section>
 
 <!-- SECONDARY CTA -->
 <section class="section cta-section">
   <div class="section-inner narrow">
-    <h2>Ready to stop sprinting?</h2>
-    <a href="login.html" class="btn btn-primary btn-lg">Make Your Timetable</a>
+    <h2>Get your classes in one place.</h2>
+    <a href="login.html" data-timetable-link class="btn btn-primary btn-lg">Make Your Timetable</a>
   </div>
 </section>
 
 <footer class="site-footer landing-footer">
-  <p>© 2026 Bellhop. Built by Vivaan Saraf.</p>
+  <p>© <span data-current-year>2026</span> Bellhop. Built by Vivaan Saraf.</p>
 </footer>
 
-<script src="landing.js?v=5"></script>
+<script src="landing.js?v=9"></script>
 </body>
 </html>

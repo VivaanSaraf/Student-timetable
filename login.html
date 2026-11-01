@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
-<link rel="stylesheet" href="login.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="login.css?v=6">
 </head>
 <body>
 
@@ -56,12 +56,8 @@
     </form>
 
     <p class="login-note">
-      <strong>How this works:</strong> your password is run through PBKDF2 (150,000 rounds, SHA-256,
-      with a random salt) and only that hash is saved — the password itself is never stored.
-      Everything lives in this browser, so there's no server and no database.
-      That means someone with access to this device and its developer tools could still get past it,
-      and your account won't follow you to another device or browser.
-      It's a school project, so please don't reuse a real password.
+      Your account and timetable are saved on the Bellhop server, so they follow you to another browser on this computer.
+      Already made an account before this update? Log in once using the browser where you made it to bring your timetable over.
     </p>
   </section>
 </main>
@@ -70,6 +66,6 @@
   <p>© 2026 Bellhop. Built by Vivaan Saraf.</p>
 </footer>
 
-<script src="login.js?v=5"></script>
+<script src="login.js?v=9"></script>
 </body>
 </html>

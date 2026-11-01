@@ -1,0 +1,46 @@
+# Bellhop
+
+Run `python3 server.py` from this folder, then open `http://localhost:8123/index.html`.
+PDF imports need the `pdftotext` command (Poppler) installed on the host.
+
+The server keeps accounts and timetables in `data/bellhop.sqlite3`. Browsers on
+this computer share that database when they use this server. Keep the `data`
+folder if you move the site to a new computer; it contains the saved accounts
+and schedules. The data folder is excluded from Git.
+
+If you created an account before the server was added, open the site at the same
+address you originally used (`localhost` or `127.0.0.1`) **in that original
+browser** and log in once. Bellhop will transfer that account and its timetable
+to the database. Then log in normally from another browser. If the original
+browser data was cleared, the old account and timetable cannot be recovered
+from the static site.
+
+This development server listens on this computer only. Access from another
+device requires hosting the site and database on a server with HTTPS.
+
+## Add repeating classes
+
+Classes in the Weekly view repeat every week. In the 10-day cycle view, they
+repeat each cycle. Choose a day and time, then open **Repeat on more days** to
+save the same subject, room and time on other days at once.
+
+A pop-up shows any existing class that overlaps the chosen time. Change the
+time or day before saving. Classes can start exactly when the previous one ends.
+If one day in a group clashes, none of that group is saved. PDF imports also
+check for clashes and continue to skip exact duplicates.
+
+**Home** keeps your session signed in; choose **Your Timetable** to return.
+**Log out** ends the session.
+
+## Import a 10-day timetable
+
+Log in, choose **Import a PDF**, and preview the detected classes. Edit or remove
+any row and add missing ones before importing. Set the date that was **Day 1**
+on the calendar; the cycle advances on weekdays and repeats after Day 10.
+School holidays are not known automatically, so update the Day 1 date after a
+break if your school pauses the cycle. Weekly classes remain saved in the
+Weekly view. Importing the same classes again skips duplicates.
+
+The importer reads selectable text in a PDF and recognizes common layouts with
+Day 1–10 headings and time ranges. Scanned PDFs need OCR first. The uploaded
+file is read for the preview and is not saved to disk.

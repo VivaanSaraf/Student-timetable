@@ -13,3 +13,20 @@ topbarNav.addEventListener('click', (e) => {
     navToggle.setAttribute('aria-expanded', 'false');
   }
 });
+
+async function updateTimetableLinks(){
+  let signedIn = false;
+  try{
+    const response = await fetch('/api/session', {credentials:'same-origin'});
+    signedIn = response.ok;
+  }catch { /* The login page will show a connection message if needed. */ }
+  document.querySelectorAll('[data-timetable-link]').forEach(link => {
+    link.href = signedIn ? 'timetable.html' : 'login.html';
+    link.textContent = signedIn ? 'Your Timetable' : 'Make Your Timetable';
+  });
+}
+
+document.querySelectorAll('[data-current-year]').forEach(item => {
+  item.textContent = new Date().getFullYear();
+});
+window.addEventListener('pageshow', updateTimetableLinks);

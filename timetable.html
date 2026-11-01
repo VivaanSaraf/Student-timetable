@@ -3,24 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bellhop — Your Week, Sorted</title>
+<title>Bellhop — Your Schedule, Sorted</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
-<script>
-  // Send visitors to the login page unless they hold an unexpired session.
-  try{
-    const raw = localStorage.getItem('timetable-session');
-    const session = raw ? JSON.parse(raw) : null;
-    if(!session || !session.expiresAt || Date.now() > session.expiresAt){
-      localStorage.removeItem('timetable-session');
-      window.location.replace('login.html');
-    }
-  }catch(e){
-    window.location.replace('login.html');
-  }
-</script>
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -32,7 +19,7 @@
     <div class="brand">
       <span class="brand-mark">⏱</span> Bell<span class="accent-green">hop</span>
     </div>
-    <p class="tagline">your week, sorted <span class="dot-red">•</span></p>
+    <p class="tagline">your schedule, sorted <span class="dot-red">•</span></p>
   </div>
   <div class="header-side header-side-right">
     <span class="user-greet" id="userGreet"></span>
@@ -42,19 +29,19 @@
 
 <div class="page-shell">
 
-  <!-- SIDEBAR -->
+  <!-- CLASS TOOLS -->
   <aside class="sidebar">
     <section class="card add-card" aria-labelledby="add-heading">
       <h2 id="add-heading">➕ Add a class</h2>
       <form id="classForm" class="class-form">
         <div class="field">
           <label for="subject">Subject</label>
-          <input type="text" id="subject" placeholder="e.g. Chemistry" required maxlength="40">
+          <input type="text" id="subject" placeholder="e.g. Chemistry" required maxlength="80">
         </div>
 
         <div class="field">
           <label for="day">Day</label>
-          <select id="day" required>
+          <select id="day" required aria-describedby="recurrenceHelp">
             <option value="" disabled selected>Pick a day</option>
             <option>Monday</option>
             <option>Tuesday</option>
@@ -65,6 +52,15 @@
             <option>Sunday</option>
           </select>
         </div>
+
+        <details class="repeat-options form-wide" id="repeatOptions">
+          <summary>Repeat on more days</summary>
+          <p>Select any other days with the same class, time and room.</p>
+          <fieldset>
+            <legend class="sr-only">Additional days</legend>
+            <div id="repeatDays" class="repeat-days"></div>
+          </fieldset>
+        </details>
 
         <div class="field-row">
           <div class="field">
@@ -91,8 +87,19 @@
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary">Add to timetable</button>
+        <p id="recurrenceHelp" class="form-help form-wide">Every class repeats each week. Add it once and it stays on your timetable.</p>
+        <p id="classMessage" class="import-message form-wide" role="status"></p>
+        <button type="submit" id="addClassBtn" class="btn btn-primary form-wide">Add to timetable</button>
       </form>
+    </section>
+
+    <section class="card import-card" aria-labelledby="import-heading">
+      <h2 id="import-heading">📄 Import a PDF</h2>
+      <p class="import-help">Upload a timetable PDF, including a dated weekly export. Review each class before saving. You can add the other week later.</p>
+      <label for="pdfFile">Timetable PDF</label>
+      <input id="pdfFile" type="file" accept=".pdf,application/pdf">
+      <button id="previewPdfBtn" type="button" class="btn btn-primary">Preview classes</button>
+      <p id="pdfMessage" class="import-message" role="status"></p>
     </section>
 
     <section class="card next-card" aria-labelledby="next-heading">
@@ -112,54 +119,61 @@
       </div>
     </div>
 
-    <div class="day-tabs" id="dayTabs">
-      <button class="day-tab active" data-day="Monday">Mon</button>
-      <button class="day-tab" data-day="Tuesday">Tue</button>
-      <button class="day-tab" data-day="Wednesday">Wed</button>
-      <button class="day-tab" data-day="Thursday">Thu</button>
-      <button class="day-tab" data-day="Friday">Fri</button>
-      <button class="day-tab" data-day="Saturday">Sat</button>
-      <button class="day-tab" data-day="Sunday">Sun</button>
+    <div class="schedule-settings">
+      <div class="field">
+        <label for="scheduleMode">View</label>
+        <select id="scheduleMode">
+          <option value="weekly">Weekly</option>
+          <option value="cycle">10-day cycle</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="cycleStart">Date of Day 1</label>
+        <input id="cycleStart" type="date" aria-describedby="cycleHint">
+      </div>
+      <p id="cycleHint">The cycle skips weekends. Set a new Day 1 after school holidays.</p>
     </div>
+    <p id="settingsMessage" class="import-message" role="status"></p>
 
-    <div id="weekGrid" class="week-grid">
-      <div class="day-col" data-day="Monday">
-        <h3 class="day-col-head">Monday</h3>
-        <div class="day-col-list"></div>
+    <div class="day-tabs" id="dayTabs"></div>
+    <div id="weekGrid" class="week-grid"></div>
+
+    <section class="import-preview" id="importPreview" aria-labelledby="previewHeading" hidden>
+      <div class="preview-heading">
+        <h3 id="previewHeading">Check your classes</h3>
+        <p id="previewSummary"></p>
       </div>
-      <div class="day-col" data-day="Tuesday">
-        <h3 class="day-col-head">Tuesday</h3>
-        <div class="day-col-list"></div>
-      </div>
-      <div class="day-col" data-day="Wednesday">
-        <h3 class="day-col-head">Wednesday</h3>
-        <div class="day-col-list"></div>
-      </div>
-      <div class="day-col" data-day="Thursday">
-        <h3 class="day-col-head">Thursday</h3>
-        <div class="day-col-list"></div>
-      </div>
-      <div class="day-col" data-day="Friday">
-        <h3 class="day-col-head">Friday</h3>
-        <div class="day-col-list"></div>
-      </div>
-      <div class="day-col" data-day="Saturday">
-        <h3 class="day-col-head">Saturday</h3>
-        <div class="day-col-list"></div>
-      </div>
-      <div class="day-col" data-day="Sunday">
-        <h3 class="day-col-head">Sunday</h3>
-        <div class="day-col-list"></div>
-      </div>
-    </div>
+      <p id="previewError" class="import-message" role="alert"></p>
+      <form id="importForm">
+        <div class="field preview-date">
+          <label for="importDayOne">Which date was Day 1?</label>
+          <input id="importDayOne" type="date" required>
+          <small>Choose a Monday–Friday. The cycle skips weekends.</small>
+        </div>
+        <div id="previewRows" class="preview-rows"></div>
+        <div class="preview-actions">
+          <button type="button" class="btn btn-ghost" id="addPreviewRow">+ Add missing class</button>
+          <button type="button" class="btn btn-ghost" id="cancelImport">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="confirmImport">Import classes</button>
+        </div>
+      </form>
+    </section>
   </main>
 
 </div>
 
 <footer class="site-footer">
-  <p>Made for students, by students' problems. Stay on time! ✅</p>
+  <p>© 2026 Bellhop. Built by Vivaan Saraf.</p>
 </footer>
 
-<script src="script.js?v=5"></script>
+<dialog id="clashDialog" class="clash-dialog" aria-labelledby="clashTitle" aria-describedby="clashDescription">
+  <span class="clash-icon" aria-hidden="true">!</span>
+  <h2 id="clashTitle">That time is already taken.</h2>
+  <p id="clashDescription">This overlaps a class on your timetable. Choose another time or day.</p>
+  <ul id="clashList"></ul>
+  <form method="dialog"><button class="btn btn-primary" autofocus>Change time</button></form>
+</dialog>
+
+<script src="script.js?v=9"></script>
 </body>
 </html>
