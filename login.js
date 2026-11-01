@@ -104,6 +104,7 @@ form.addEventListener('submit', async e => {
       }
     }
 
+    BellhopSession.set(true);
     // A migrated account may have an older timetable on this browser.
     const oldClasses = oldTimetable(account.user);
     if(Array.isArray(oldClasses) && oldClasses.length){
@@ -131,6 +132,9 @@ setMode('login');
 window.addEventListener('pageshow', async () => {
   try{
     const response = await fetch('/api/session', {credentials:'same-origin'});
-    if(response.ok) window.location.replace('timetable.html');
+    if(response.ok){
+      BellhopSession.set(true);
+      window.location.replace('timetable.html');
+    }else if(response.status === 401) BellhopSession.set(false);
   }catch { /* Keep the form available if the server cannot be reached. */ }
 });

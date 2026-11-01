@@ -4,11 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bellhop — Your Schedule, On Hand</title>
+<script src="session-ui.js?v=10"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css?v=9">
-<link rel="stylesheet" href="landing.css?v=9">
+<link rel="stylesheet" href="landing.css?v=10">
 </head>
 <body class="landing">
 
@@ -23,7 +24,7 @@
     <a href="#problem">Sound familiar?</a>
     <a href="#solution">The idea</a>
     <a href="#built-by">Built by</a>
-    <a href="login.html" data-timetable-link class="btn btn-primary btn-nav">Make Your Timetable</a>
+    <a href="login.html" data-timetable-link class="btn btn-primary btn-nav"><span class="guest-label">Make Your Timetable</span><span class="member-label">Your Timetable</span></a>
   </nav>
 
   <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
@@ -35,7 +36,7 @@
 <section class="hero">
   <h1>Your Timetable,<br>In Your <span class="accent-green">Pocket.</span></h1>
   <p class="hero-sub">What's next, and which room? Bellhop is a small handheld device for checking your classes without taking out your phone.</p>
-  <a href="login.html" data-timetable-link class="btn btn-primary btn-lg">Make Your Timetable</a>
+  <a href="login.html" data-timetable-link class="btn btn-primary btn-lg"><span class="guest-label">Make Your Timetable</span><span class="member-label">Your Timetable</span></a>
 </section>
 
 <!-- PROBLEM -->
@@ -107,7 +108,7 @@
 <section class="section cta-section">
   <div class="section-inner narrow">
     <h2>Get your classes in one place.</h2>
-    <a href="login.html" data-timetable-link class="btn btn-primary btn-lg">Make Your Timetable</a>
+    <a href="login.html" data-timetable-link class="btn btn-primary btn-lg"><span class="guest-label">Make Your Timetable</span><span class="member-label">Your Timetable</span></a>
   </div>
 </section>
 
@@ -115,6 +116,6 @@
   <p>© <span data-current-year>2026</span> Bellhop. Built by Vivaan Saraf.</p>
 </footer>
 
-<script src="landing.js?v=9"></script>
+<script src="landing.js?v=10"></script>
 </body>
 </html>

@@ -32,7 +32,7 @@ COLORS = {"green", "red", "white"}
 SESSION_SECONDS = 12 * 60 * 60
 PUBLIC_FILES = {
     "index.html", "timetable.html", "login.html", "style.css", "landing.css",
-    "login.css", "script.js", "landing.js", "login.js",
+    "login.css", "script.js", "landing.js", "login.js", "session-ui.js",
 }
 
 

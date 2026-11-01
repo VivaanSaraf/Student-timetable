@@ -15,17 +15,15 @@ topbarNav.addEventListener('click', (e) => {
 });
 
 async function updateTimetableLinks(){
-  let signedIn = false;
+  BellhopSession.apply();
   try{
     const response = await fetch('/api/session', {credentials:'same-origin'});
-    signedIn = response.ok;
-  }catch { /* The login page will show a connection message if needed. */ }
-  document.querySelectorAll('[data-timetable-link]').forEach(link => {
-    link.href = signedIn ? 'timetable.html' : 'login.html';
-    link.textContent = signedIn ? 'Your Timetable' : 'Make Your Timetable';
-  });
+    if(response.ok) BellhopSession.set(true);
+    else if(response.status === 401) BellhopSession.set(false);
+  }catch { /* Keep the last confirmed display while the server is unreachable. */ }
 }
 
+BellhopSession.apply();
 document.querySelectorAll('[data-current-year]').forEach(item => {
   item.textContent = new Date().getFullYear();
 });

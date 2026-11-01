@@ -1,6 +1,9 @@
 body.landing{
   display:block;
 }
+.member-label{display:none;}
+html[data-signed-in="true"] .member-label{display:inline;}
+html[data-signed-in="true"] .guest-label{display:none;}
 
 /* TOP BAR */
 .topbar{

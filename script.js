@@ -164,6 +164,7 @@ document.getElementById('homeBtn').addEventListener('click', () => {
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   try{
     await api('/api/logout', {});
+    BellhopSession.set(false);
     window.location.replace('login.html');
   }catch(error){ classMessage.textContent = error.message; }
 });
@@ -480,9 +481,10 @@ document.getElementById('importForm').addEventListener('submit', async e => {
 async function start(){
   try{
     const response = await fetch('/api/session', {credentials:'same-origin'});
-    if(response.status === 401){ window.location.replace('login.html'); return; }
+    if(response.status === 401){ BellhopSession.set(false); window.location.replace('login.html'); return; }
     if(!response.ok) throw new Error('Could not load your account.');
     const session = await response.json();
+    BellhopSession.set(true);
     document.getElementById('userGreet').textContent = `Hey, ${session.name}`;
     await loadSchedule();
   }catch(error){ nextUp.textContent = error.message; }
