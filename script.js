@@ -40,6 +40,9 @@ async function api(path, body){
     method:'POST', headers:{'Content-Type':'application/json'},
     credentials:'same-origin', body:JSON.stringify(body)
   });
+  if(!(response.headers.get('Content-Type') || '').includes('application/json')){
+    throw new Error('The timetable service is unavailable. Please try again shortly.');
+  }
   const data = await response.json();
   if(!response.ok){
     const error = new Error(data.error || 'Could not save your timetable.');

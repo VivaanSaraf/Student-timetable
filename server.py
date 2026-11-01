@@ -7,7 +7,6 @@ import json
 import os
 import re
 import secrets
-import sqlite3
 import time
 from datetime import date
 from http import HTTPStatus
@@ -17,11 +16,15 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from pdf_import import extract_pdf_classes, suggest_day_one
+from storage import database, initialize_database, INTEGRITY_ERRORS
 
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = Path(os.environ.get("BELLHOP_DB", ROOT / "data" / "bellhop.sqlite3"))
-PORT = int(os.environ.get("BELLHOP_PORT", "8123"))
+PORT = int(os.environ.get("PORT", os.environ.get("BELLHOP_PORT", "8123")))
+HOST = os.environ.get("BELLHOP_HOST", "127.0.0.1")
+SECURE_COOKIES = os.environ.get("BELLHOP_SECURE_COOKIES", "0") == "1"
+ALLOWED_ORIGINS = {value.strip().rstrip("/") for value in
+                   os.environ.get("BELLHOP_ALLOWED_ORIGINS", "").split(",") if value.strip()}
 WEEK_DAYS = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 CYCLE_DAYS = {f"Day {n}" for n in range(1, 11)}
 DAYS = WEEK_DAYS | CYCLE_DAYS
@@ -31,52 +34,6 @@ PUBLIC_FILES = {
     "index.html", "timetable.html", "login.html", "style.css", "landing.css",
     "login.css", "script.js", "landing.js", "login.js",
 }
-
-
-def database():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(DB_PATH, timeout=10)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("PRAGMA busy_timeout=10000")
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            display_name TEXT NOT NULL,
-            salt BLOB NOT NULL,
-            password_hash BLOB NOT NULL,
-            iterations INTEGER NOT NULL,
-            failures INTEGER NOT NULL DEFAULT 0,
-            locked_until INTEGER NOT NULL DEFAULT 0,
-            legacy_import_done INTEGER NOT NULL DEFAULT 0,
-            schedule_mode TEXT NOT NULL DEFAULT 'weekly',
-            cycle_start TEXT
-        );
-        CREATE TABLE IF NOT EXISTS sessions (
-            token_hash TEXT PRIMARY KEY,
-            username TEXT NOT NULL REFERENCES users(username),
-            expires_at INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS classes (
-            username TEXT NOT NULL REFERENCES users(username),
-            id TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            day TEXT NOT NULL,
-            start TEXT NOT NULL,
-            end TEXT NOT NULL,
-            room TEXT NOT NULL,
-            color TEXT NOT NULL,
-            PRIMARY KEY (username, id)
-        );
-    """)
-    columns = {row[1] for row in db.execute("PRAGMA table_info(users)")}
-    if "legacy_import_done" not in columns:
-        db.execute("ALTER TABLE users ADD COLUMN legacy_import_done INTEGER NOT NULL DEFAULT 0")
-    if "schedule_mode" not in columns:
-        db.execute("ALTER TABLE users ADD COLUMN schedule_mode TEXT NOT NULL DEFAULT 'weekly'")
-    if "cycle_start" not in columns:
-        db.execute("ALTER TABLE users ADD COLUMN cycle_start TEXT")
-    return db
 
 
 def validate_cycle_start(value):
@@ -116,7 +73,7 @@ def validate_class(item):
 
 def save_class(db, username, item):
     db.execute(
-        "INSERT OR REPLACE INTO classes VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO classes VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (username, id) DO UPDATE SET subject = excluded.subject, day = excluded.day, start = excluded.start, end = excluded.end, room = excluded.room, color = excluded.color",
         (username, item["id"], item["subject"], item["day"], item["start"],
          item["end"], item["room"], item["color"]),
     )
@@ -147,6 +104,10 @@ def user_classes(db, username):
 
 
 class Handler(SimpleHTTPRequestHandler):
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(30)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
@@ -161,6 +122,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         if cookie:
+            if SECURE_COOKIES:
+                cookie += "; Secure"
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
         self.wfile.write(body)
@@ -207,6 +170,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path == "/health":
+            self.send_json(200, {"ok": True})
+            return
         if path.startswith("/api/"):
             with database() as db:
                 user = self.current_user(db)
@@ -248,7 +214,7 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlsplit(self.path).path
         origin = self.headers.get("Origin")
         host = self.headers.get("Host", "")
-        if origin and urlsplit(origin).netloc != host:
+        if origin and urlsplit(origin).netloc != host and origin not in ALLOWED_ORIGINS:
             self.send_json(403, {"error": "Request blocked."})
             return
         if not path.startswith("/api/"):
@@ -285,7 +251,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.handle_api(path, data)
         except ValueError as exc:
             self.send_json(400, {"error": str(exc)})
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             self.send_json(409, {"error": "That account or class already exists. Try again."})
 
     def handle_api(self, path, data):
@@ -390,7 +356,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if len({item["id"] for item in items}) != len(items):
                     raise ValueError("Each class needs a different ID.")
                 db.execute("BEGIN IMMEDIATE")
-                mode = db.execute("SELECT schedule_mode FROM users WHERE username = ?", (username,)).fetchone()[0]
+                mode = db.execute("SELECT schedule_mode FROM users WHERE username = ?", (username,)).fetchone()["schedule_mode"]
                 if any(item["day"] not in (CYCLE_DAYS if mode == "cycle" else WEEK_DAYS) for item in items):
                     raise ValueError("Choose a day in the current timetable.")
                 existing = user_classes(db, username)
@@ -414,7 +380,7 @@ class Handler(SimpleHTTPRequestHandler):
                 db.commit()
                 self.send_json(200, {"ok": True})
             elif path == "/api/classes/clear":
-                mode = db.execute("SELECT schedule_mode FROM users WHERE username = ?", (username,)).fetchone()[0]
+                mode = db.execute("SELECT schedule_mode FROM users WHERE username = ?", (username,)).fetchone()["schedule_mode"]
                 days = CYCLE_DAYS if mode == "cycle" else WEEK_DAYS
                 db.executemany("DELETE FROM classes WHERE username = ? AND day = ?",
                                ((username, day) for day in days))
@@ -427,8 +393,8 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError("Too many classes to transfer.")
                 classes = [validate_class(item) for item in raw_classes]
                 db.execute("BEGIN IMMEDIATE")
-                already_done = db.execute("SELECT legacy_import_done FROM users WHERE username = ?", (username,)).fetchone()[0]
-                count = db.execute("SELECT COUNT(*) FROM classes WHERE username = ?", (username,)).fetchone()[0]
+                already_done = db.execute("SELECT legacy_import_done FROM users WHERE username = ?", (username,)).fetchone()["legacy_import_done"]
+                count = db.execute("SELECT COUNT(*) AS count FROM classes WHERE username = ?", (username,)).fetchone()["count"]
                 if count or already_done:
                     self.send_json(200, {"imported": False})
                     return
@@ -472,8 +438,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    with database():
-        pass
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Bellhop running at http://localhost:{PORT}/", flush=True)
+    initialize_database()
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f"Bellhop listening on {HOST}:{PORT}", flush=True)
     server.serve_forever()
