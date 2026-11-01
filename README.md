@@ -1,5 +1,25 @@
 # Bellhop
 
+## Online deployment
+
+The public site is https://bellhop1.netlify.app. Netlify builds only the public
+assets into `dist/` and proxies `/api/` to the free Docker web service at
+https://bellhop-bh03.onrender.com. The free Render instance may take about a
+minute to wake after inactivity. Render's `DATABASE_URL` points to the persistent
+Netlify Postgres database; the database password is kept in private environment
+variables. The Docker image includes Poppler for PDF imports.
+
+Render configuration: Docker runtime, free compute, health path `/health`,
+`DATABASE_URL` (private) and
+`BELLHOP_ALLOWED_ORIGINS=https://bellhop1.netlify.app`. Do not use a local
+database file for the hosted service: free Render disks do not preserve data.
+
+`migrate_to_postgres.py` accepts the database URL on stdin to copy local accounts
+and classes without copying sessions or replacing an existing account with a
+different password. Keep database URLs and data files out of Git.
+
+## Run locally
+
 Run `python3 server.py` from this folder, then open `http://localhost:8123/index.html`.
 PDF imports need the `pdftotext` command (Poppler) installed on the host.
 
