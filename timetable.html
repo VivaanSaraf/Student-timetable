@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -170,11 +170,15 @@
 <dialog id="clashDialog" class="clash-dialog" aria-labelledby="clashTitle" aria-describedby="clashDescription">
   <span class="clash-icon" aria-hidden="true">!</span>
   <h2 id="clashTitle">That time is already taken.</h2>
-  <p id="clashDescription">This overlaps a class on your timetable. Choose another time or day.</p>
+  <p id="clashDescription">Replace the overlapping saved classes below, or change your new class's time or day.</p>
   <ul id="clashList"></ul>
-  <form method="dialog"><button class="btn btn-primary" autofocus>Change time</button></form>
+  <p id="clashError" role="alert"></p>
+  <div class="clash-actions">
+    <button type="button" class="btn btn-primary" id="replaceClashesBtn">Replace overlapping classes</button>
+    <form method="dialog"><button class="btn btn-ghost" id="changeTimeBtn" autofocus>Change time</button></form>
+  </div>
 </dialog>
 
-<script src="script.js?v=11"></script>
+<script src="script.js?v=12"></script>
 </body>
 </html>

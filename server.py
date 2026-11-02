@@ -92,9 +92,33 @@ def class_conflicts(existing, requested):
         for other in scheduled:
             if (item["day"] == other["day"] and item["start"] < other["end"]
                     and item["end"] > other["start"]):
-                conflicts.setdefault(class_key(other), other)
+                conflicts.setdefault(other["id"], other)
         scheduled.append(item)
     return list(conflicts.values())
+
+
+def check_replacement(existing, requested, replacement_ids, all_requested=None):
+    """Require confirmation of the current saved conflicts before replacing."""
+    if replacement_ids is not None and (
+        not isinstance(replacement_ids, list) or len(replacement_ids) > 200
+        or any(not isinstance(item_id, str) or not item_id for item_id in replacement_ids)
+        or len(set(replacement_ids)) != len(replacement_ids)
+    ):
+        raise ValueError("Invalid classes to replace.")
+    internal = class_conflicts([], all_requested if all_requested is not None else requested)
+    if internal:
+        return {"error": "The new classes overlap each other. Change their days or times before saving.",
+                "conflicts": internal, "canReplace": False}, []
+    conflicts = class_conflicts(existing, requested)
+    if conflicts and set(replacement_ids or []) != {item["id"] for item in conflicts}:
+        return {"error": "These saved classes overlap your new classes. Replace them or change the time or day.",
+                "conflicts": conflicts, "canReplace": True}, []
+    return None, conflicts
+
+
+def remove_replaced_classes(db, username, conflicts):
+    db.executemany("DELETE FROM classes WHERE username = ? AND id = ?",
+                   ((username, item["id"]) for item in conflicts))
 
 
 def user_classes(db, username):
@@ -370,15 +394,16 @@ class Handler(SimpleHTTPRequestHandler):
                 existing = user_classes(db, username)
                 if {item["id"] for item in items} & {item["id"] for item in existing}:
                     raise ValueError("That class was already saved. Refresh your timetable.")
-                conflicts = class_conflicts(existing, items)
-                if conflicts:
-                    self.send_json(409, {"error": "That time overlaps another class. Choose a different time or day.", "conflicts": conflicts})
+                conflict_error, replaced = check_replacement(existing, items, data.get("replaceIds"))
+                if conflict_error:
+                    self.send_json(409, conflict_error)
                     return
+                remove_replaced_classes(db, username, replaced)
                 for item in items:
                     save_class(db, username, item)
                 db.execute("UPDATE users SET legacy_import_done = 1 WHERE username = ?", (username,))
                 db.commit()
-                self.send_json(200, {"class": items[0], "classes": items})
+                self.send_json(200, {"class": items[0], "classes": items, "replaced": len(replaced)})
             elif path == "/api/classes/delete":
                 item_id = data.get("id")
                 if not isinstance(item_id, str):
@@ -431,16 +456,20 @@ class Handler(SimpleHTTPRequestHandler):
                     new_classes.append(item)
                 if len({item["id"] for item in new_classes}) != len(new_classes) or ({item["id"] for item in new_classes} & {item["id"] for item in existing}):
                     raise ValueError("Class IDs are repeated. Preview the PDF again.")
-                conflicts = class_conflicts(existing, new_classes)
-                if conflicts:
-                    self.send_json(409, {"error": "Some imported classes overlap. Review their days and times before importing.", "conflicts": conflicts})
+                conflict_error, replaced = check_replacement(
+                    existing, new_classes, data.get("replaceIds"),
+                    all_requested=list({class_key(item): item for item in classes}.values()),
+                )
+                if conflict_error:
+                    self.send_json(409, conflict_error)
                     return
+                remove_replaced_classes(db, username, replaced)
                 for item in new_classes:
                     save_class(db, username, item)
                 db.execute("UPDATE users SET schedule_mode = 'cycle', cycle_start = ?, legacy_import_done = 1 WHERE username = ?",
                            (cycle_start, username))
                 db.commit()
-                self.send_json(200, {"imported": len(new_classes), "skipped": len(classes) - len(new_classes)})
+                self.send_json(200, {"imported": len(new_classes), "skipped": len(classes) - len(new_classes), "replaced": len(replaced)})
             else:
                 self.send_json(404, {"error": "Not found."})
 

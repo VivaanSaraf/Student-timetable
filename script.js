@@ -26,7 +26,12 @@ const recurrenceHelp = document.getElementById('recurrenceHelp');
 const classMessage = document.getElementById('classMessage');
 const addClassBtn = document.getElementById('addClassBtn');
 const clashDialog = document.getElementById('clashDialog');
+const replaceClashesBtn = document.getElementById('replaceClashesBtn');
+const changeTimeBtn = document.getElementById('changeTimeBtn');
+const clashError = document.getElementById('clashError');
 let clashFocus = null;
+let replaceClashes = null;
+let replacingClashes = false;
 
 let classes = [];
 let mode = 'weekly';
@@ -47,6 +52,7 @@ async function api(path, body){
   if(!response.ok){
     const error = new Error(data.error || 'Could not save your timetable.');
     error.conflicts = data.conflicts;
+    error.canReplace = data.canReplace;
     throw error;
   }
   return data;
@@ -169,10 +175,16 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   }catch(error){ classMessage.textContent = error.message; }
 });
 
-function showClashes(conflicts, focusTarget){
+function showClashes(error, focusTarget, onReplace){
   clashFocus = focusTarget;
+  replaceClashes = error.canReplace === true ? () => onReplace(error.conflicts.map(item => item.id)) : null;
+  replaceClashesBtn.hidden = !replaceClashes;
+  clashError.textContent = '';
+  document.getElementById('clashDescription').textContent = replaceClashes
+    ? 'Replace the overlapping saved classes below, or change your new class’s time or day.'
+    : 'These new classes overlap each other. Change their days or times before saving.';
   const list = document.getElementById('clashList');
-  list.replaceChildren(...conflicts.map(item => {
+  list.replaceChildren(...error.conflicts.map(item => {
     const li = document.createElement('li');
     const name = document.createElement('strong');
     name.textContent = item.subject;
@@ -184,7 +196,44 @@ function showClashes(conflicts, focusTarget){
   if(!clashDialog.open) clashDialog.showModal();
 }
 
-clashDialog.addEventListener('close', () => clashFocus?.focus());
+clashDialog.addEventListener('close', () => {
+  replaceClashes = null;
+  clashFocus?.focus();
+});
+clashDialog.addEventListener('cancel', event => {
+  if(replacingClashes) event.preventDefault();
+});
+replaceClashesBtn.addEventListener('click', async () => {
+  if(!replaceClashes || replacingClashes) return;
+  const replace = replaceClashes;
+  replacingClashes = true;
+  replaceClashesBtn.disabled = changeTimeBtn.disabled = true;
+  replaceClashesBtn.textContent = 'Replacing…';
+  clashError.textContent = '';
+  try{ await replace(); }
+  finally{
+    replacingClashes = false;
+    replaceClashesBtn.disabled = changeTimeBtn.disabled = false;
+    replaceClashesBtn.textContent = 'Replace overlapping classes';
+  }
+});
+
+async function saveWithClashChoice(path, payload, focusTarget, onSaved, errorTarget, replaceIds){
+  let saved = false;
+  try{
+    const result = await api(path, {...payload, ...(replaceIds ? {replaceIds} : {})});
+    saved = true;
+    if(clashDialog.open) clashDialog.close();
+    await onSaved(result);
+  }catch(error){
+    errorTarget.textContent = saved ? 'Your classes were saved. Refresh the page to load your updated timetable.' : error.message;
+    if(!saved && error.conflicts?.length){
+      showClashes(error, focusTarget, ids => saveWithClashChoice(path, payload, focusTarget, onSaved, errorTarget, ids));
+    }else if(clashDialog.open){
+      clashError.textContent = error.message;
+    }
+  }
+}
 
 modeSelect.addEventListener('change', async () => {
   const requested = modeSelect.value;
@@ -246,18 +295,17 @@ form.addEventListener('submit', async e => {
   addClassBtn.disabled = true;
   addClassBtn.textContent = 'Saving…';
   try{
-    await api('/api/classes/add', {classes:items});
-    await loadSchedule();
-    form.reset();
-    repeatDays.querySelectorAll('input').forEach(input => {input.disabled = false;});
-    document.getElementById('repeatOptions').open = false;
-    colorPicker.querySelectorAll('.swatch').forEach(button => button.classList.toggle('selected', button.dataset.color === 'green'));
-    selectedColor = 'green';
-    setActiveDay(item.day);
-    classMessage.textContent = items.length === 1 ? 'Class added. It will repeat automatically.' : `Class added on ${items.length} days. It will repeat automatically.`;
-  }catch(error){
-    if(error.conflicts?.length) showClashes(error.conflicts, startInput);
-    else classMessage.textContent = error.message;
+    await saveWithClashChoice('/api/classes/add', {classes:items}, startInput, async result => {
+      await loadSchedule();
+      form.reset();
+      repeatDays.querySelectorAll('input').forEach(input => {input.disabled = false;});
+      document.getElementById('repeatOptions').open = false;
+      colorPicker.querySelectorAll('.swatch').forEach(button => button.classList.toggle('selected', button.dataset.color === 'green'));
+      selectedColor = 'green';
+      setActiveDay(item.day);
+      classMessage.textContent = (items.length === 1 ? 'Class added. It will repeat automatically.' : `Class added on ${items.length} days. It will repeat automatically.`)
+        + (result.replaced ? ` Replaced ${result.replaced} overlapping ${result.replaced === 1 ? 'class' : 'classes'}.` : '');
+    }, classMessage);
   }finally{
     addClassBtn.disabled = false;
     addClassBtn.textContent = 'Add to timetable';
@@ -469,18 +517,17 @@ document.getElementById('importForm').addEventListener('submit', async e => {
   confirmImport.disabled = true;
   confirmImport.textContent = 'Importing…';
   try{
-    const result = await api('/api/classes/import-cycle', {
+    await saveWithClashChoice('/api/classes/import-cycle', {
       cycleStart:importDayOne.value, classes:importedClasses
-    });
-    await loadSchedule();
-    activeDay = currentDay();
-    setActiveDay(activeDay);
-    previewPanel.hidden = true;
-    pdfMessage.textContent = `Imported ${result.imported} classes.${result.skipped ? ` Skipped ${result.skipped} duplicates.` : ''}`;
-    pdfFile.value = '';
-  }catch(error){
-    previewError.textContent = error.message;
-    if(error.conflicts?.length) showClashes(error.conflicts, previewRows.querySelector('.preview-start'));
+    }, previewRows.querySelector('.preview-start'), async result => {
+      await loadSchedule();
+      activeDay = currentDay();
+      setActiveDay(activeDay);
+      previewPanel.hidden = true;
+      pdfMessage.textContent = `Imported ${result.imported} classes.${result.skipped ? ` Skipped ${result.skipped} duplicates.` : ''}`
+        + (result.replaced ? ` Replaced ${result.replaced} overlapping ${result.replaced === 1 ? 'class' : 'classes'}.` : '');
+      pdfFile.value = '';
+    }, previewError);
   }
   finally{ confirmImport.disabled = false; confirmImport.textContent = 'Import classes'; }
 });

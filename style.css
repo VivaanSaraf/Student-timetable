@@ -171,6 +171,9 @@ h1,h2,h3, .brand{
 .clash-dialog ul{list-style:none;margin:20px 0;display:grid;gap:10px;}
 .clash-dialog li{padding:12px;background:var(--panel-2);border-left:3px solid var(--red);border-radius:8px;font-size:.9rem;line-height:1.6;overflow-wrap:anywhere;}
 .clash-dialog .btn{width:100%;}
+.clash-actions{display:grid;gap:10px;}
+#clashError:empty{display:none;}
+#clashError{color:var(--red);margin-bottom:16px;}
 
 .field{
   display:flex;
