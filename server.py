@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from pdf_import import extract_pdf_classes, suggest_day_one
+from image_import import extract_image_timetable
 from storage import database, initialize_database, INTEGRITY_ERRORS
 
 
@@ -221,30 +222,37 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json(404, {"error": "Not found."})
             return
         try:
-            if path == "/api/pdf/preview":
+            if path in {"/api/pdf/preview", "/api/timetable/preview"}:
                 with database() as db:
                     if not self.current_user(db):
                         self.send_json(401, {"error": "Please log in."})
                         return
-                if self.headers.get("Content-Type", "").split(";")[0] != "application/pdf":
-                    raise ValueError("Choose a PDF file.")
+                content_type = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                if content_type not in {"application/pdf", "image/png", "image/jpeg"}:
+                    raise ValueError("Choose a PDF, PNG or JPG file.")
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
                 except ValueError:
-                    raise ValueError("Invalid PDF size") from None
+                    raise ValueError("Invalid file size") from None
                 if length < 5 or length > 5 * 1024 * 1024:
-                    raise ValueError("PDF must be smaller than 5 MB.")
-                pdf_bytes = self.rfile.read(length)
-                classes = extract_pdf_classes(pdf_bytes)
+                    raise ValueError("File must be smaller than 5 MB.")
+                file_bytes = self.rfile.read(length)
+                is_image = content_type.startswith("image/")
+                if is_image:
+                    classes, suggested_day_one = extract_image_timetable(file_bytes, content_type)
+                else:
+                    classes = extract_pdf_classes(file_bytes)
+                    suggested_day_one = suggest_day_one(file_bytes)
                 if not classes:
-                    self.send_json(422, {"error": "No classes found. Try a text-based PDF with Day 1–10 labels and class times, or share the PDF so the importer can be adapted."})
+                    self.send_json(422, {"error": "No classes found. Use a clear timetable with Day 1–10 labels and class times. For screenshots, crop out anything outside the timetable."})
                     return
                 found_days = {item["day"] for item in classes}
                 self.send_json(200, {
                     "classes": classes[:200],
                     "foundDays": sorted(found_days, key=lambda value: int(value.split()[1])),
                     "truncated": len(classes) > 200,
-                    "suggestedDayOne": suggest_day_one(pdf_bytes),
+                    "suggestedDayOne": suggested_day_one,
+                    "fromImage": is_image,
                 })
                 return
             data = self.read_json()

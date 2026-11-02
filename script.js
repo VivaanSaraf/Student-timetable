@@ -413,21 +413,28 @@ document.getElementById('cancelImport').addEventListener('click', () => {
 
 document.getElementById('previewPdfBtn').addEventListener('click', async e => {
   const file = pdfFile.files[0];
-  if(!file){ pdfMessage.textContent = 'Choose a PDF first.'; return; }
-  if(file.size > 5 * 1024 * 1024){ pdfMessage.textContent = 'PDF must be smaller than 5 MB.'; return; }
+  if(!file){ pdfMessage.textContent = 'Choose a PDF, PNG or JPG first.'; return; }
+  if(file.size > 5 * 1024 * 1024){ pdfMessage.textContent = 'File must be smaller than 5 MB.'; return; }
+  const extension = file.name.split('.').pop().toLowerCase();
+  const contentType = {pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg'}[extension];
+  if(!contentType){ pdfMessage.textContent = 'Choose a PDF, PNG or JPG file.'; return; }
   const button = e.currentTarget;
   button.disabled = true;
-  button.textContent = 'Reading PDF…';
+  button.textContent = contentType === 'application/pdf' ? 'Reading PDF…' : 'Reading screenshot…';
   pdfMessage.textContent = '';
   try{
-    const response = await fetch('/api/pdf/preview', {
-      method:'POST', headers:{'Content-Type':'application/pdf'},
+    const response = await fetch('/api/timetable/preview', {
+      method:'POST', headers:{'Content-Type':contentType},
       credentials:'same-origin', body:file
     });
+    if(!(response.headers.get('Content-Type') || '').includes('application/json')){
+      throw new Error('The file reader is taking longer than expected. Try a smaller screenshot or try again shortly.');
+    }
     const result = await response.json();
-    if(!response.ok) throw new Error(result.error || 'Could not read that PDF.');
+    if(!response.ok) throw new Error(result.error || 'Could not read that file.');
     previewRows.replaceChildren(...result.classes.map(makePreviewRow));
     previewSummary.textContent = `${result.classes.length} classes found across ${result.foundDays.length} of 10 days. Review each one before importing.`
+      + (result.fromImage ? ' Screenshot text can be misread—double-check subjects, days and times.' : '')
       + (result.truncated ? ' Only the first 200 are shown.' : '');
     previewError.textContent = '';
     importDayOne.value = cycleStart || result.suggestedDayOne || '';

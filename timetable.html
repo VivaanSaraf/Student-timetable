@@ -95,10 +95,10 @@
     </section>
 
     <section class="card import-card" aria-labelledby="import-heading">
-      <h2 id="import-heading">📄 Import a PDF</h2>
-      <p class="import-help">Upload a timetable PDF, including a dated weekly export. Review each class before saving. You can add the other week later.</p>
-      <label for="pdfFile">Timetable PDF</label>
-      <input id="pdfFile" type="file" accept=".pdf,application/pdf">
+      <h2 id="import-heading">📄 Import a timetable</h2>
+      <p class="import-help">Upload a PDF or a clear screenshot (PNG or JPG), up to 5 MB. Keep day labels and class times visible, then check each class before saving.</p>
+      <label for="pdfFile">Timetable PDF or screenshot</label>
+      <input id="pdfFile" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg">
       <button id="previewPdfBtn" type="button" class="btn btn-primary">Preview classes</button>
       <p id="pdfMessage" class="import-message" role="status"></p>
     </section>
@@ -175,6 +175,6 @@
   <form method="dialog"><button class="btn btn-primary" autofocus>Change time</button></form>
 </dialog>
 
-<script src="script.js?v=10"></script>
+<script src="script.js?v=11"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@ import subprocess
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
+from statistics import median
 
 
 DAY_RE = re.compile(r"\b(?:day|d)\s*(10|[1-9])\b", re.I)
@@ -139,7 +140,7 @@ def parse_timetable_text(text):
 
 
 def parse_dated_grid(pdf_bytes):
-    """Read the dated, five-column student timetable export by PDF coordinates."""
+    """Read independent timetable columns using text coordinates, including OCR."""
     result = subprocess.run(
         ["pdftotext", "-bbox-layout", "-", "-"], input=pdf_bytes,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=12, check=False,
@@ -155,32 +156,54 @@ def parse_dated_grid(pdf_bytes):
     recognized = False
     for page in root.findall(".//{*}page"):
         blocks = []
-        for block in page.findall(".//{*}block"):
-            lines = [" ".join((word.text or "") for word in line.findall("{*}word"))
-                     for line in block.findall("{*}line")]
-            label = " ".join(line for line in lines if line).strip()
-            if label:
-                blocks.append((float(block.get("xMin")), float(block.get("yMin")), label))
+        for line in page.findall(".//{*}line"):
+            segment = []
+            previous_right = None
+            for word in line.findall("{*}word"):
+                x, y = float(word.get("xMin")), float(word.get("yMin"))
+                height = float(word.get("yMax")) - y
+                if segment and x - previous_right > max(8, height * 2):
+                    blocks.append((segment[0][0], segment[0][1], " ".join(item[2] for item in segment)))
+                    segment = []
+                segment.append((x, y, word.text or ""))
+                previous_right = float(word.get("xMax"))
+            if segment:
+                blocks.append((segment[0][0], segment[0][1], " ".join(item[2] for item in segment)))
 
-        headers = sorted(((x, y, label) for x, y, label in blocks if DATE_HEADER_RE.match(label)),
+        def is_header(label):
+            return DATE_HEADER_RE.match(label) or DAY_RE.fullmatch(label)
+
+        headers = sorted(((x, y, label) for x, y, label in blocks if is_header(label)),
                          key=lambda entry: entry[0])
-        if len(headers) != 5 or len({x for x, _, _ in headers}) != 5:
+        if not headers or len(headers) > 10 or len({x for x, _, _ in headers}) != len(headers):
             continue
-        if sum(bool(DAY_RE.search(label)) for _, _, label in headers) < 2:
+        if not any(DAY_RE.search(label) for _, _, label in headers):
             continue
         recognized = True
-        boundaries = [(headers[index][0] + headers[index + 1][0]) / 2
-                      for index in range(4)]
+        boundaries = [headers[index + 1][0] - (headers[index + 1][0] - headers[index][0]) * 0.08
+                      for index in range(len(headers) - 1)]
         for index, (header_x, header_y, header) in enumerate(headers):
             day_match = DAY_RE.search(header)
             if not day_match:
                 continue  # Holidays have no cycle day and no classes.
             day = f"Day {day_match.group(1)}"
             left = boundaries[index - 1] if index else 0
-            right = boundaries[index] if index < 4 else float(page.get("width"))
-            entries = sorted(((y, label) for x, y, label in blocks
-                              if left <= x < right and y > header_y + 8
-                              and not DATE_HEADER_RE.match(label)), key=lambda entry: entry[0])
+            right = boundaries[index] if index < len(boundaries) else float(page.get("width"))
+            words = [(float(word.get("xMin")), float(word.get("yMin")),
+                      float(word.get("yMax")), word.text or "")
+                     for word in page.findall(".//{*}word")
+                     if left <= float(word.get("xMin")) < right
+                     and float(word.get("yMin")) > header_y + 8]
+            line_tolerance = median([bottom - top for _, top, bottom, _ in words]) * 0.5 if words else 1
+            lines = []
+            for word in sorted(words, key=lambda item: ((item[1] + item[2]) / 2, item[0])):
+                center = (word[1] + word[2]) / 2
+                if not lines or abs(center - lines[-1][0]) > line_tolerance:
+                    lines.append((center, [word]))
+                else:
+                    lines[-1][1].append(word)
+            entries = [(y, " ".join(word[3] for word in sorted(line, key=lambda item: item[0])))
+                       for y, line in lines]
             title = None
             for _, label in entries:
                 match = TIME_RE.search(label)
@@ -191,6 +214,8 @@ def parse_dated_grid(pdf_bytes):
                         if item:
                             found.append(item)
                     title = None
+                elif re.search(r"\d{1,2}:\d{2}", label):
+                    title = None  # Never attach an unreadable time to the next subject.
                 elif not re.match(r"^(?:Public Holiday|PD Day|Dussehra)$", label, re.I):
                     title = f"{title} {label}" if title else label
 

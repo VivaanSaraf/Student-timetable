@@ -20,8 +20,10 @@ different password. Keep database URLs and data files out of Git.
 
 ## Run locally
 
-Run `python3 server.py` from this folder, then open `http://localhost:8123/index.html`.
-PDF imports need the `pdftotext` command (Poppler) installed on the host.
+Create a Python virtual environment, install `requirements.txt`, then run
+`python server.py` from this folder and open `http://localhost:8123/index.html`.
+PDF imports need Poppler (`pdftotext`); screenshot imports also need Tesseract
+with English language data. The hosted Docker image installs both.
 
 The server keeps accounts and timetables in `data/bellhop.sqlite3`. Browsers on
 this computer share that database when they use this server. Keep the `data`
@@ -52,9 +54,12 @@ check for clashes and continue to skip exact duplicates.
 **Home** keeps your session signed in; choose **Your Timetable** to return.
 **Log out** ends the session.
 
-## Import a 10-day timetable
+## Import a 10-day timetable from a PDF or screenshot
 
-Log in, choose **Import a PDF**, and preview the detected classes. Edit or remove
+Log in, choose **Import a timetable**, and upload a PDF, PNG or JPG (up to 5 MB).
+Screenshots are read with OCR on the Bellhop server and are not saved. Include
+the day labels and class times, and crop unrelated content. Small or blurry
+text may be misread, so check the preview carefully. Edit or remove
 any row and add missing ones before importing. Set the date that was **Day 1**
 on the calendar; the cycle advances on weekdays and repeats after Day 10.
 School holidays are not known automatically, so update the Day 1 date after a
