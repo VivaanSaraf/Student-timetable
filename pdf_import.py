@@ -13,8 +13,10 @@ TIME_RE = re.compile(
     r"(?<!\w)(\d{1,2})[:.](\d{2})\s*(am|pm)?\s*[-–—]\s*"
     r"(\d{1,2})[:.](\d{2})\s*(am|pm)?\b", re.I
 )
-ROOM_RE = re.compile(r"\b(?:room|rm)\s*[:#-]?\s*([\w-]+)\b", re.I)
-DATE_HEADER_RE = re.compile(r"^\d{1,2}\s+[A-Za-z]{3}\s+(?:Mon|Tue|Wed|Thu|Fri)\b", re.I)
+ROOM_RE = re.compile(r"(?:\b(?:room|rm)\s*[:#-]?\s*|[•·»›→°]\s*)([\w][\w./-]*)", re.I)
+DATE_HEADER_RE = re.compile(
+    r"^(?:\d{1,2}\s*[A-Za-z]{3}|[A-Za-z]{3}\s*\d{1,2})\s*,?\s*(?:Mon|Tue|Wed|Thu|Fri)\b", re.I
+)
 
 
 def parse_time(match):
@@ -47,9 +49,12 @@ def make_class(day, times, label):
     if not label or re.fullmatch(r"(?:break|lunch|recess|homeroom)", label, re.I):
         return None
     room_match = ROOM_RE.search(label)
-    room = f"Room {room_match.group(1)}" if room_match else ""
-    subject = ROOM_RE.sub("", label).strip(" -|:,.")
-    if not subject:
+    room_token = room_match.group(1) if room_match else ""
+    room = f"Room {room_token}" if room_token.isdigit() else room_token
+    subject = ROOM_RE.sub("", label).strip(" -|:,.)")
+    if (not subject or not re.search(r"[A-Za-z]", subject)
+            or re.search(r"\d{1,2}:\d{2}", subject)
+            or len(re.findall(r"\bMYP\d", subject, re.I)) > 1):
         return None
     return {
         "id": uuid.uuid4().hex,
@@ -186,7 +191,7 @@ def parse_dated_grid(pdf_bytes):
                    if (match := DAY_RE.search(label))}
         inferred_offset = next(iter(offsets)) if len(offsets) == 1 else None
         recognized = True
-        boundaries = [headers[index + 1][0] - (headers[index + 1][0] - headers[index][0]) * 0.08
+        boundaries = [headers[index + 1][0] - (headers[index + 1][0] - headers[index][0]) * 0.02
                       for index in range(len(headers) - 1)]
         for index, (header_x, header_y, header) in enumerate(headers):
             day_match = DAY_RE.search(header)
@@ -219,6 +224,14 @@ def parse_dated_grid(pdf_bytes):
                 if match:
                     times = parse_time(match)
                     if title and times:
+                        suffix = label[match.end():].strip(" )] -|:;,")
+                        # School screenshots put the room after the time, often
+                        # separated by a bullet rather than the word "Room".
+                        room_match = ROOM_RE.search(suffix)
+                        if room_match:
+                            title += f" Room {room_match.group(1)}"
+                        elif re.fullmatch(r"[\w][\w./-]*", suffix):
+                            title += f" Room {suffix}"
                         item = make_class(day, times, title)
                         if item:
                             found.append(item)
@@ -268,7 +281,7 @@ def suggest_day_one(pdf_bytes):
     return source.isoformat()
 
 
-def extract_pdf_classes(pdf_bytes):
+def extract_pdf_classes(pdf_bytes, *, require_grid=False):
     if not pdf_bytes.startswith(b"%PDF-"):
         raise ValueError("Choose a valid PDF file.")
     try:
@@ -279,6 +292,8 @@ def extract_pdf_classes(pdf_bytes):
         raise ValueError("PDF reader is not installed on this server (pdftotext).") from None
     if grid_classes is not None:
         return grid_classes
+    if require_grid:
+        raise ValueError("Could not reliably separate the timetable columns. Include the day headings and crop out anything outside the timetable, or use the original PDF.")
     try:
         result = subprocess.run(
             ["pdftotext", "-layout", "-nopgbrk", "-", "-"],

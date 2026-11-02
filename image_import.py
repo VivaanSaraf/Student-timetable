@@ -2,6 +2,7 @@
 
 import io
 import os
+import re
 import subprocess
 import warnings
 from threading import BoundedSemaphore
@@ -40,7 +41,7 @@ def read_image_timetable(image_bytes, mime_type):
                 image = Image.new("RGB", rgba.size, "white")
                 image.paste(rgba, mask=rgba.getchannel("A"))
                 # Keep OCR predictable on the free server; enlarge small screenshots.
-                scale = min(2, 2000 / max(image.size))
+                scale = min(2, 2400 / max(image.size))
                 if scale != 1:
                     image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))), Image.Resampling.LANCZOS)
                 image = ImageOps.grayscale(image)
@@ -66,9 +67,11 @@ def read_image_timetable(image_bytes, mime_type):
     if result.returncode or not result.stdout.startswith(b"%PDF-"):
         raise ValueError("Could not read this screenshot. Try a clearer image with larger text.")
     try:
-        classes = extract_pdf_classes(result.stdout)
+        classes = extract_pdf_classes(result.stdout, require_grid=True)
     except ValueError as error:
         if "selectable text" in str(error):
             raise ValueError("No text found. Use a clear screenshot with visible day labels and times.") from None
         raise
+    for item in classes:
+        item["subject"] = re.sub(r"\bWhat\s+\|\s+Need\b", "What I Need", item["subject"], flags=re.I)
     return classes, suggest_day_one(result.stdout)
