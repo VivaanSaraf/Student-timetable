@@ -157,21 +157,34 @@ def parse_dated_grid(pdf_bytes):
     except ET.ParseError:
         return None
 
+    pages = []
+    for page in root.findall(".//{*}page"):
+        lines = []
+        for line in page.findall(".//{*}line"):
+            lines.append([(float(word.get("xMin")), float(word.get("yMin")),
+                           float(word.get("xMax")), float(word.get("yMax")), word.text or "")
+                          for word in line.findall("{*}word")])
+        pages.append({"width": float(page.get("width")), "lines": lines,
+                      "words": [word for line in lines for word in line]})
+    return parse_grid_pages(pages)
+
+
+def parse_grid_pages(pages):
+    """Read dated timetable columns from PDF or OCR word bounding boxes."""
     found = []
     recognized = False
-    for page in root.findall(".//{*}page"):
+    for page in pages:
         blocks = []
-        for line in page.findall(".//{*}line"):
+        for line in page["lines"]:
             segment = []
             previous_right = None
-            for word in line.findall("{*}word"):
-                x, y = float(word.get("xMin")), float(word.get("yMin"))
-                height = float(word.get("yMax")) - y
+            for x, y, right, bottom, label in line:
+                height = bottom - y
                 if segment and x - previous_right > max(8, height * 2):
                     blocks.append((segment[0][0], segment[0][1], " ".join(item[2] for item in segment)))
                     segment = []
-                segment.append((x, y, word.text or ""))
-                previous_right = float(word.get("xMax"))
+                segment.append((x, y, label))
+                previous_right = right
             if segment:
                 blocks.append((segment[0][0], segment[0][1], " ".join(item[2] for item in segment)))
 
@@ -202,12 +215,10 @@ def parse_dated_grid(pdf_bytes):
             else:
                 continue  # Holidays have no cycle day and no classes.
             left = boundaries[index - 1] if index else 0
-            right = boundaries[index] if index < len(boundaries) else float(page.get("width"))
-            words = [(float(word.get("xMin")), float(word.get("yMin")),
-                      float(word.get("yMax")), word.text or "")
-                     for word in page.findall(".//{*}word")
-                     if left <= float(word.get("xMin")) < right
-                     and float(word.get("yMin")) > header_y + 8]
+            right = boundaries[index] if index < len(boundaries) else page["width"]
+            words = [(word[0], word[1], word[3], word[4])
+                     for word in page["words"]
+                     if left <= word[0] < right and word[1] > header_y + 8]
             line_tolerance = median([bottom - top for _, top, bottom, _ in words]) * 0.5 if words else 1
             lines = []
             for word in sorted(words, key=lambda item: ((item[1] + item[2]) / 2, item[0])):

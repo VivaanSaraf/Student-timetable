@@ -1,5 +1,6 @@
-"""Read timetable screenshots locally with Tesseract, then reuse the PDF parser."""
+"""Read timetable screenshots using OCR word positions and shared grid parsing."""
 
+import csv
 import io
 import os
 import re
@@ -9,9 +10,10 @@ from threading import BoundedSemaphore
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from pdf_import import extract_pdf_classes, suggest_day_one
+from pdf_import import parse_grid_pages
 
 IMAGE_READER = BoundedSemaphore(1)
+
 
 def extract_image_timetable(image_bytes, mime_type):
     if not IMAGE_READER.acquire(blocking=False):
@@ -55,7 +57,7 @@ def read_image_timetable(image_bytes, mime_type):
 
     try:
         result = subprocess.run(
-            ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "3", "pdf"],
+            ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "3", "tsv"],
             input=output.getvalue(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             timeout=22, check=False,
             env={**os.environ, "OMP_THREAD_LIMIT": "1", "OMP_NUM_THREADS": "1"},
@@ -64,14 +66,20 @@ def read_image_timetable(image_bytes, mime_type):
         raise ValueError("The image reader is not available yet. Please try again shortly.") from None
     except subprocess.TimeoutExpired:
         raise ValueError("This screenshot took too long to read. Crop it to fewer days and try again.") from None
-    if result.returncode or not result.stdout.startswith(b"%PDF-"):
+    if result.returncode or not result.stdout.startswith(b"level\t"):
         raise ValueError("Could not read this screenshot. Try a clearer image with larger text.")
-    try:
-        classes = extract_pdf_classes(result.stdout, require_grid=True)
-    except ValueError as error:
-        if "selectable text" in str(error):
-            raise ValueError("No text found. Use a clear screenshot with visible day labels and times.") from None
-        raise
+    lines = {}
+    for row in csv.DictReader(io.StringIO(result.stdout.decode("utf-8", errors="replace")), delimiter="\t"):
+        if row["level"] != "5" or not row["text"].strip():
+            continue
+        x, y, width, height = (float(row[key]) for key in ("left", "top", "width", "height"))
+        key = tuple(row[key] for key in ("block_num", "par_num", "line_num"))
+        lines.setdefault(key, []).append((x, y, x + width, y + height, row["text"].strip()))
+    page = {"width": image.width, "lines": list(lines.values()),
+            "words": [word for line in lines.values() for word in line]}
+    classes = parse_grid_pages([page])
+    if not classes:
+        raise ValueError("Could not reliably read the timetable columns. Include the day headings and crop out anything outside the timetable, or use the original PDF.")
     for item in classes:
         item["subject"] = re.sub(r"\bWhat\s+\|\s+Need\b", "What I Need", item["subject"], flags=re.I)
-    return classes, suggest_day_one(result.stdout)
+    return classes, None
