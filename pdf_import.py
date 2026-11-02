@@ -179,14 +179,23 @@ def parse_dated_grid(pdf_bytes):
             continue
         if not any(DAY_RE.search(label) for _, _, label in headers):
             continue
+        # Small grey day numbers can be lost by OCR. Recover a missing number
+        # only when the other printed days agree with the dated column order.
+        offsets = {(int(match.group(1)) - index - 1) % 10
+                   for index, (_, _, label) in enumerate(headers)
+                   if (match := DAY_RE.search(label))}
+        inferred_offset = next(iter(offsets)) if len(offsets) == 1 else None
         recognized = True
         boundaries = [headers[index + 1][0] - (headers[index + 1][0] - headers[index][0]) * 0.08
                       for index in range(len(headers) - 1)]
         for index, (header_x, header_y, header) in enumerate(headers):
             day_match = DAY_RE.search(header)
-            if not day_match:
+            if day_match:
+                day = f"Day {day_match.group(1)}"
+            elif inferred_offset is not None and DATE_HEADER_RE.match(header):
+                day = f"Day {(inferred_offset + index) % 10 + 1}"
+            else:
                 continue  # Holidays have no cycle day and no classes.
-            day = f"Day {day_match.group(1)}"
             left = boundaries[index - 1] if index else 0
             right = boundaries[index] if index < len(boundaries) else float(page.get("width"))
             words = [(float(word.get("xMin")), float(word.get("yMin")),
