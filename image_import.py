@@ -1,6 +1,7 @@
 """Read timetable screenshots locally with Tesseract, then reuse the PDF parser."""
 
 import io
+import os
 import subprocess
 import warnings
 from threading import BoundedSemaphore
@@ -39,7 +40,7 @@ def read_image_timetable(image_bytes, mime_type):
                 image = Image.new("RGB", rgba.size, "white")
                 image.paste(rgba, mask=rgba.getchannel("A"))
                 # Keep OCR predictable on the free server; enlarge small screenshots.
-                scale = min(2, 3000 / max(image.size))
+                scale = min(2, 2000 / max(image.size))
                 if scale != 1:
                     image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))), Image.Resampling.LANCZOS)
                 image = ImageOps.grayscale(image)
@@ -55,7 +56,8 @@ def read_image_timetable(image_bytes, mime_type):
         result = subprocess.run(
             ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "3", "pdf"],
             input=output.getvalue(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            timeout=18, check=False,
+            timeout=22, check=False,
+            env={**os.environ, "OMP_THREAD_LIMIT": "1", "OMP_NUM_THREADS": "1"},
         )
     except FileNotFoundError:
         raise ValueError("The image reader is not available yet. Please try again shortly.") from None
