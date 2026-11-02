@@ -80,6 +80,11 @@ def read_image_timetable(image_bytes, mime_type):
     classes = parse_grid_pages([page])
     if not classes:
         raise ValueError("Could not reliably read the timetable columns. Include the day headings and crop out anything outside the timetable, or use the original PDF.")
+    # Skip arrival and dismissal blocks, while keeping homeroom during P1.
+    classes = [item for item in classes if not (
+        re.search(r"\bhomeroom\b", item["subject"], re.I)
+        and (item["start"], item["end"]) in {("07:00", "07:50"), ("14:50", "16:20")}
+    )]
     for item in classes:
         item["subject"] = re.sub(r"\bWhat\s+\|\s+Need\b", "What I Need", item["subject"], flags=re.I)
     return classes, None
