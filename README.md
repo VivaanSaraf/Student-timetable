@@ -56,21 +56,33 @@ check for clashes and continue to skip exact duplicates.
 
 ## Import a 10-day timetable from a PDF or screenshot
 
-Log in, choose **Import a timetable**, and upload a PDF, PNG or JPG (up to 5 MB).
+Log in, choose **Import**, and upload a PDF, PNG or JPG (up to 5 MB).
 Screenshots are read with OCR on the Bellhop server and are not saved. Include
 the day labels and class times, and crop unrelated content. Small or blurry
 text may be misread, so check the preview carefully. Edit or remove
 any row and add missing ones before importing. Set the date that was **Day 1**
 on the calendar; the cycle advances on weekdays and repeats after Day 10.
 School holidays are not known automatically, so update the Day 1 date after a
-break if your school pauses the cycle. Weekly classes remain saved in the
-Weekly view. Importing the same classes again skips duplicates.
+break if your school pauses the cycle. Weekly classes remain saved and appear
+on their actual weekdays. Importing the same classes again skips duplicates.
 
-In Weekly view, imported cycle classes appear Monday–Friday: **Week 1** shows
-Days 1–5 and **Week 2** shows Days 6–10. Use the **Cycle week** selector to switch
-between them. This changes the display; imported classes still repeat every 10
-school days, and the next class follows the Day 1 date. Clear all in Weekly view
-removes weekly classes and the five cycle days selected in that view.
+The calendar fills the screen without a sidebar. **Week** labels each column
+with its weekday, date and month. **10-day cycle** labels each column Day 1–10,
+with the matching date, month and weekday. Classes appear at their actual times.
+Use **Today** or the arrows to move between weeks or cycles; **Calendar settings**
+also lets you jump to a date and update Day 1. Imported classes follow the Day 1
+anchor, skipping weekends, even when Day 1 is midweek. With a Monday Day 1,
+Days 1–5 form the first school week and Days 6–10 the second.
+
+**Create** opens the repeating-class form. Click an empty time to prefill a new
+class, or an existing class to see its date, time, room and recurrence. Search
+filters subjects and rooms in the displayed calendar. **Next up** follows the
+current date regardless of which week you are browsing. **Clear all classes**
+in Calendar settings removes all weekly and cycle classes after confirmation.
+
+On phones, both schedule types show one dated day at a time. Use the day arrows
+or swipe horizontally to move between days. Cycle navigation skips weekends;
+Today returns to the current day (or the next school day in cycle mode).
 
 The importer reads selectable text in a PDF and recognizes common layouts with
 Day 1–10 headings and time ranges. Scanned PDFs need OCR first. The uploaded

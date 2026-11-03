@@ -61,6 +61,14 @@ class ReplacementTests(unittest.TestCase):
     def saved(self):
         return self.request('/api/classes')[1]['classes']
 
+    def test_save_cycle_anchor_preserves_weekly_view(self):
+        status, _ = self.request('/api/settings', {'mode': 'weekly', 'cycleStart': '2026-10-28'})
+        self.assertEqual(status, 200)
+        _, result = self.request('/api/classes')
+        self.assertEqual(result['mode'], 'weekly')
+        self.assertEqual(result['cycleStart'], '2026-10-28')
+        self.assertEqual(self.request('/api/settings', {'mode': 'weekly', 'cycleStart': '2026-11-01'})[0], 400)
+
     def test_clear_week_preserves_other_cycle_week(self):
         self.add(self.item('weekly'))
         self.request('/api/classes/import-cycle', {

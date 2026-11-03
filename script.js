@@ -7,11 +7,16 @@ const startInput = document.getElementById('start');
 const endInput = document.getElementById('end');
 const roomInput = document.getElementById('room');
 const colorPicker = document.getElementById('colorPicker');
-const dayTabs = document.getElementById('dayTabs');
+const calendarHeaders = document.getElementById('calendarHeaders');
+const calendarScroll = document.getElementById('calendarScroll');
+const classDialog = document.getElementById('classDialog');
+const importDialog = document.getElementById('importDialog');
+const settingsDialog = document.getElementById('settingsDialog');
+const eventDialog = document.getElementById('eventDialog');
+const calendarSearch = document.getElementById('calendarSearch');
 const weekGrid = document.getElementById('weekGrid');
 const nextUp = document.getElementById('nextUp');
 const modeSelect = document.getElementById('scheduleMode');
-const cycleWeekSelect = document.getElementById('cycleWeek');
 const cycleStartInput = document.getElementById('cycleStart');
 const settingsMessage = document.getElementById('settingsMessage');
 const pdfFile = document.getElementById('pdfFile');
@@ -37,7 +42,11 @@ let replacingClashes = false;
 let classes = [];
 let mode = 'weekly';
 let cycleStart = '';
-let activeDay = 'Monday';
+let viewDate = new Date();
+let selectedEvent = null;
+let gridStart = 7 * 60;
+let gridEnd = 18 * 60;
+const HOUR_HEIGHT = 104;
 let selectedColor = 'green';
 let dayCols = {};
 
@@ -70,103 +79,218 @@ async function loadSchedule(){
   cycleStartInput.value = cycleStart;
   buildDayUi();
   render();
+  modeSelect.disabled = false;
 }
 
 function currentDays(){ return mode === 'cycle' ? CYCLE_DAYS : WEEK_DAYS; }
-function visibleClasses(){
-  if(mode === 'cycle') return classes.filter(c => CYCLE_DAYS.includes(c.day));
-  const firstDay = Number(cycleWeekSelect.value) * 5;
-  return classes.flatMap(c => {
-    if(WEEK_DAYS.includes(c.day)) return [c];
-    const index = CYCLE_DAYS.indexOf(c.day) - firstDay;
-    return index >= 0 && index < 5 ? [{...c, day:WEEK_DAYS[index]}] : [];
-  });
-}
 function localDate(value){ return new Date(`${value}T12:00:00`); }
+function dateKey(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function addDays(date, offset){
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
+  result.setDate(result.getDate() + offset);
+  return result;
+}
+function weekStart(date){ return addDays(date, -((date.getDay() + 6) % 7)); }
 function schoolDay(date){ return date.getDay() >= 1 && date.getDay() <= 5; }
-
+function weekdayName(date){ return WEEK_DAYS[(date.getDay() + 6) % 7]; }
+function shiftSchoolDays(date, offset){
+  let result = addDays(date, 0);
+  const sign = Math.sign(offset);
+  for(let remaining = Math.abs(offset); remaining;){
+    result = addDays(result, sign);
+    if(schoolDay(result)) remaining--;
+  }
+  return result;
+}
 function cycleDayFor(date){
   if(!cycleStart || !schoolDay(date)) return null;
   const anchor = localDate(cycleStart);
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
-  const sign = target >= anchor ? 1 : -1;
-  let offset = 0;
-  const cursor = new Date(anchor);
-  while(cursor.getTime() !== target.getTime()){
-    cursor.setDate(cursor.getDate() + sign);
+  if(!Number.isFinite(anchor.getTime()) || !schoolDay(anchor)) return null;
+  const utcDay = value => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / 86400000;
+  const difference = utcDay(date) - utcDay(anchor);
+  const sign = Math.sign(difference);
+  const wholeWeeks = Math.floor(Math.abs(difference) / 7);
+  let offset = wholeWeeks * 5 * sign;
+  let cursor = addDays(anchor, wholeWeeks * 7 * sign);
+  for(let i = 0; i < Math.abs(difference) % 7; i++){
+    cursor = addDays(cursor, sign);
     if(schoolDay(cursor)) offset += sign;
   }
   return CYCLE_DAYS[((offset % 10) + 10) % 10];
 }
-
-function todayName(){
-  const now = new Date();
-  return WEEK_DAYS[(now.getDay() + 6) % 7];
+function singleDayView(){
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches;
 }
-
-function currentDay(){
-  if(mode === 'weekly') return todayName();
-  const date = new Date();
-  for(let i=0; i<7 && !schoolDay(date); i++) date.setDate(date.getDate()+1);
-  return cycleDayFor(date) || CYCLE_DAYS[0];
+function calendarDates(){
+  if(singleDayView()){
+    let date = addDays(viewDate, 0);
+    if(mode === 'cycle') while(!schoolDay(date)) date = addDays(date, 1);
+    return [date];
+  }
+  if(mode === 'weekly') return Array.from({length:7}, (_, i) => addDays(weekStart(viewDate), i));
+  let start = addDays(viewDate, 0);
+  while(!schoolDay(start)) start = addDays(start, 1);
+  const index = CYCLE_DAYS.indexOf(cycleDayFor(start));
+  start = shiftSchoolDays(start, -Math.max(index, 0));
+  return Array.from({length:10}, (_, i) => shiftSchoolDays(start, i));
 }
-
+function classesForDate(date){
+  const cycleDay = cycleDayFor(date);
+  return classes.filter(c => c.day === weekdayName(date) || c.day === cycleDay);
+}
+function visibleClasses(){
+  const ids = new Set(calendarDates().flatMap(date => classesForDate(date).map(c => c.id)));
+  return classes.filter(c => ids.has(c.id));
+}
+function updateCalendarHeading(dates){
+  const first = dates[0], last = dates[dates.length - 1];
+  const month = date => date.toLocaleDateString('en-GB', {month:'long'});
+  let title = `${month(first)} ${first.getFullYear()}`;
+  if(first.getFullYear() !== last.getFullYear()) title += ` – ${month(last)} ${last.getFullYear()}`;
+  else if(first.getMonth() !== last.getMonth()) title = `${month(first)} – ${month(last)} ${last.getFullYear()}`;
+  document.getElementById('calendarTitle').textContent = title;
+  const short = date => date.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'});
+  document.getElementById('calendarRange').textContent = singleDayView()
+    ? `${weekdayName(first)}, ${short(first)}`
+    : `${short(first)} – ${short(last)} · ${mode === 'cycle' ? '10 school days' : 'Week view'}`;
+  document.getElementById('jumpDate').value = dateKey(viewDate);
+  const period = singleDayView() ? 'day' : mode === 'cycle' ? 'cycle' : 'week';
+  document.getElementById('prevWeekBtn').setAttribute('aria-label', `Previous ${period}`);
+  document.getElementById('prevWeekBtn').title = `Previous ${period}`;
+  document.getElementById('nextWeekBtn').setAttribute('aria-label', `Next ${period}`);
+  document.getElementById('nextWeekBtn').title = `Next ${period}`;
+  document.querySelector('.calendar-footnote').textContent = singleDayView()
+    ? 'Swipe for another day · Tap a class for details · Tap an empty time to create'
+    : 'Click a class for details · Click an empty time to create a class · Repeating classes stay on your timetable';
+  const hasCycle = classes.some(c => CYCLE_DAYS.includes(c.day));
+  document.getElementById('calendarContext').textContent = hasCycle
+    ? '10-day school cycle · weekends skipped · cycle days shown below each date'
+    : 'Your weekly classes repeat automatically. Make room for a good week.';
+}
 function buildDayUi(){
-  const days = currentDays();
-  const showCycleWeek = mode === 'weekly' && classes.some(c => CYCLE_DAYS.includes(c.day));
-  document.getElementById('cycleWeekField').hidden = !showCycleWeek;
-  document.getElementById('weeklyCycleHint').hidden = !showCycleWeek;
-  dayTabs.replaceChildren();
-  weekGrid.replaceChildren();
-  dayCols = {};
-  weekGrid.classList.toggle('cycle-grid', mode === 'cycle');
   dayInput.replaceChildren(new Option('Pick a day', '', true, false));
   dayInput.options[0].disabled = true;
   repeatDays.replaceChildren();
   recurrenceHelp.textContent = mode === 'cycle'
-    ? 'Every class repeats after 10 school days. Add it once and it stays on your timetable.'
-    : 'Every class repeats each week. Add it once and it stays on your timetable.';
-  days.forEach(day => {
+    ? 'Repeats every 10 school days on the selected cycle day.'
+    : 'Repeats every week on the selected weekday.';
+  currentDays().forEach(day => {
     dayInput.add(new Option(day, day));
-    const repeatLabel = document.createElement('label');
-    repeatLabel.className = 'repeat-day';
+    const label = document.createElement('label');
+    label.className = 'repeat-day';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.value = day;
-    repeatLabel.append(checkbox, document.createTextNode(day));
-    repeatDays.appendChild(repeatLabel);
-    const tab = document.createElement('button');
-    tab.type = 'button';
-    tab.className = 'day-tab';
-    tab.dataset.day = day;
-    tab.textContent = mode === 'weekly' ? day.slice(0,3) : day;
-    dayTabs.appendChild(tab);
-
+    label.append(checkbox, document.createTextNode(day));
+    repeatDays.appendChild(label);
+  });
+  buildCalendar();
+}
+function buildCalendar(){
+  const dates = calendarDates();
+  const today = dateKey(new Date());
+  const canvas = document.getElementById('calendarCanvas');
+  canvas.style.setProperty('--day-count', dates.length);
+  canvas.classList.toggle('cycle-canvas', mode === 'cycle');
+  calendarHeaders.replaceChildren();
+  weekGrid.replaceChildren();
+  dayCols = {};
+  const timezone = document.createElement('div');
+  timezone.className = 'timezone-label';
+  timezone.textContent = new Intl.DateTimeFormat('en', {timeZoneName:'shortOffset'})
+    .formatToParts(new Date()).find(part => part.type === 'timeZoneName')?.value || 'Local time';
+  calendarHeaders.appendChild(timezone);
+  dates.forEach(date => {
+    const key = dateKey(date);
+    const header = document.createElement('div');
+    header.className = 'calendar-day-header';
+    header.classList.toggle('is-today', key === today);
+    header.setAttribute('aria-label', date.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'}));
+    const fields = [
+      ['header-weekday', mode === 'cycle' ? cycleDayFor(date) || 'School day' : weekdayName(date)],
+      ['header-date', String(date.getDate())],
+      ['header-month', date.toLocaleDateString('en-GB', {month:'short', year:'numeric'})],
+      ['header-cycle', mode === 'cycle' ? weekdayName(date) : cycleDayFor(date) || (schoolDay(date) ? 'School day' : 'Weekend')]
+    ];
+    fields.forEach(([className, text]) => {
+      const span = document.createElement('span');
+      span.className = className;
+      span.textContent = text;
+      header.appendChild(span);
+    });
+    calendarHeaders.appendChild(header);
     const col = document.createElement('div');
     col.className = 'day-col';
-    col.dataset.day = day;
-    const title = document.createElement('h3');
-    title.className = 'day-col-head';
-    title.textContent = day;
+    col.dataset.date = key;
+    col.classList.toggle('is-today', key === today);
     const list = document.createElement('div');
     list.className = 'day-col-list';
-    col.append(title, list);
+    col.appendChild(list);
     weekGrid.appendChild(col);
-    dayCols[day] = {el:col, list};
+    dayCols[key] = {el:col, list, date};
   });
-  setActiveDay(days.includes(activeDay) ? activeDay : currentDay());
+  updateCalendarHeading(dates);
 }
-
-function setActiveDay(day){
-  activeDay = day;
-  dayTabs.querySelectorAll('.day-tab').forEach(t => t.classList.toggle('active', t.dataset.day === day));
-  Object.entries(dayCols).forEach(([name, col]) => col.el.classList.toggle('active', name === day));
+function navigateCalendar(direction){
+  viewDate = singleDayView()
+    ? mode === 'cycle' ? shiftSchoolDays(calendarDates()[0], direction) : addDays(viewDate, direction)
+    : addDays(viewDate, direction * (mode === 'cycle' ? 14 : 7));
+  buildCalendar();
+  render();
 }
-
-dayTabs.addEventListener('click', e => {
-  const tab = e.target.closest('.day-tab');
-  if(tab) setActiveDay(tab.dataset.day);
+document.getElementById('prevWeekBtn').addEventListener('click', () => navigateCalendar(-1));
+document.getElementById('nextWeekBtn').addEventListener('click', () => navigateCalendar(1));
+document.getElementById('todayBtn').addEventListener('click', () => {
+  viewDate = new Date();
+  buildCalendar();
+  render();
+  scrollToSchoolStart();
 });
+document.getElementById('jumpDate').addEventListener('change', e => {
+  const date = localDate(e.target.value);
+  if(!Number.isFinite(date.getTime())) return;
+  viewDate = date;
+  buildCalendar();
+  render();
+  settingsDialog.close();
+});
+calendarSearch.addEventListener('input', render);
+if(typeof window !== 'undefined'){
+  window.matchMedia('(max-width: 760px)').addEventListener('change', () => {
+    buildCalendar();
+    render();
+  });
+}
+let touchStart = null;
+calendarScroll.addEventListener('touchstart', event => {
+  touchStart = event.touches.length === 1 ? {x:event.touches[0].clientX, y:event.touches[0].clientY} : null;
+}, {passive:true});
+calendarScroll.addEventListener('touchend', event => {
+  if(!singleDayView() || !touchStart || !event.changedTouches.length) return;
+  const dx = event.changedTouches[0].clientX - touchStart.x;
+  const dy = event.changedTouches[0].clientY - touchStart.y;
+  touchStart = null;
+  if(Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.5) navigateCalendar(dx < 0 ? 1 : -1);
+}, {passive:true});
+document.querySelectorAll('[data-close]').forEach(button => {
+  button.addEventListener('click', () => document.getElementById(button.dataset.close).close());
+});
+document.getElementById('openClassBtn').addEventListener('click', () => openClass());
+document.getElementById('openImportBtn').addEventListener('click', () => importDialog.showModal());
+document.getElementById('openSettingsBtn').addEventListener('click', () => settingsDialog.showModal());
+function openClass(date = null, minutes = 9 * 60){
+  classMessage.textContent = '';
+  if(date){
+    dayInput.value = mode === 'cycle' ? cycleDayFor(date) || '' : weekdayName(date);
+    startInput.value = timeValue(minutes);
+    endInput.value = timeValue(Math.min(minutes + 40, 1439));
+    dayInput.dispatchEvent(new Event('change'));
+  }
+  classDialog.showModal();
+  subjectInput.focus();
+}
 
 dayInput.addEventListener('change', () => {
   repeatDays.querySelectorAll('input').forEach(input => {
@@ -249,43 +373,46 @@ async function saveWithClashChoice(path, payload, focusTarget, onSaved, errorTar
 
 modeSelect.addEventListener('change', async () => {
   const requested = modeSelect.value;
-  if(requested === 'cycle' && !cycleStartInput.value){
-    settingsMessage.textContent = 'Set the date of Day 1 first.';
+  if(requested === 'cycle' && !cycleStart){
+    settingsMessage.textContent = 'Set the date of Day 1 to use the 10-day view.';
     modeSelect.value = mode;
+    settingsDialog.showModal();
     cycleStartInput.focus();
     return;
   }
+  modeSelect.disabled = true;
   try{
-    await api('/api/settings', {mode:requested, cycleStart:cycleStartInput.value});
+    await api('/api/settings', {mode:requested, cycleStart});
     mode = requested;
-    cycleStart = cycleStartInput.value;
     settingsMessage.textContent = '';
-    activeDay = currentDay();
     buildDayUi();
     render();
   }catch(error){
     modeSelect.value = mode;
     settingsMessage.textContent = error.message;
-  }
+  }finally{ modeSelect.disabled = false; }
 });
 
-cycleWeekSelect.addEventListener('change', render);
-
-cycleStartInput.addEventListener('change', async () => {
-  if(!cycleStartInput.value) return;
-  try{
-    await api('/api/settings', {mode:'cycle', cycleStart:cycleStartInput.value});
-    mode = 'cycle';
-    cycleStart = cycleStartInput.value;
-    modeSelect.value = mode;
-    settingsMessage.textContent = '';
-    activeDay = currentDay();
-    buildDayUi();
-    render();
-  }catch(error){
-    cycleStartInput.value = cycleStart;
-    settingsMessage.textContent = error.message;
+document.getElementById('cycleSettingsForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const message = document.getElementById('cycleSettingsMessage');
+  const chosen = localDate(cycleStartInput.value);
+  if(!Number.isFinite(chosen.getTime()) || !schoolDay(chosen)){
+    message.textContent = 'Day 1 must be a Monday–Friday.';
+    return;
   }
+  const button = document.getElementById('saveCycleBtn');
+  button.disabled = true;
+  try{
+    await api('/api/settings', {mode, cycleStart:cycleStartInput.value});
+    cycleStart = cycleStartInput.value;
+    message.textContent = 'Day 1 date saved.';
+    settingsMessage.textContent = 'Cycle dates updated.';
+    buildCalendar();
+    render();
+    settingsDialog.close();
+  }catch(error){ message.textContent = error.message; }
+  finally{ button.disabled = false; }
 });
 
 colorPicker.addEventListener('click', e => {
@@ -316,9 +443,11 @@ form.addEventListener('submit', async e => {
       document.getElementById('repeatOptions').open = false;
       colorPicker.querySelectorAll('.swatch').forEach(button => button.classList.toggle('selected', button.dataset.color === 'green'));
       selectedColor = 'green';
-      setActiveDay(item.day);
+
       classMessage.textContent = (items.length === 1 ? 'Class added. It will repeat automatically.' : `Class added on ${items.length} days. It will repeat automatically.`)
         + (result.replaced ? ` Replaced ${result.replaced} overlapping ${result.replaced === 1 ? 'class' : 'classes'}.` : '');
+      settingsMessage.textContent = classMessage.textContent;
+      classDialog.close();
     }, classMessage);
   }finally{
     addClassBtn.disabled = false;
@@ -327,31 +456,63 @@ form.addEventListener('submit', async e => {
 });
 
 document.getElementById('clearAllBtn').addEventListener('click', async () => {
-  if(!visibleClasses().length) return;
-  const days = mode === 'cycle' ? CYCLE_DAYS : [
-    ...WEEK_DAYS, ...CYCLE_DAYS.slice(Number(cycleWeekSelect.value) * 5, Number(cycleWeekSelect.value) * 5 + 5)
-  ];
-  if(!confirm(mode === 'cycle' ? 'Clear all classes in this timetable? This cannot be undone.'
-    : 'Clear all weekly classes and the cycle classes shown in this week? This cannot be undone.')) return;
+  if(!classes.length) return;
+  if(!confirm('Delete ALL weekly and cycle classes? This removes every repeating class and cannot be undone.')) return;
   try{
-    await api('/api/classes/clear', {days});
-    classes = classes.filter(c => !days.includes(c.day));
+    await api('/api/classes/clear', {days:[...WEEK_DAYS, ...CYCLE_DAYS]});
+    classes = [];
     buildDayUi();
     render();
-  }catch(error){ alert(error.message); }
+    settingsDialog.close();
+    settingsMessage.textContent = 'All classes cleared.';
+  }catch(error){ document.getElementById('cycleSettingsMessage').textContent = error.message; }
 });
 
-weekGrid.addEventListener('click', async e => {
-  const btn = e.target.closest('.class-delete');
-  if(!btn) return;
+weekGrid.addEventListener('click', event => {
+  const card = event.target.closest('.calendar-event');
+  if(card){ openEvent(card.dataset.id, card.dataset.date); return; }
+  const column = event.target.closest('.day-col');
+  if(!column) return;
+  const col = dayCols[column.dataset.date];
+  const offset = event.clientY - col.list.getBoundingClientRect().top;
+  const minutes = Math.max(gridStart, Math.min(23 * 60, gridStart + Math.floor(offset / HOUR_HEIGHT * 4) * 15));
+  if(mode === 'cycle' && !cycleDayFor(col.date)) return;
+  openClass(col.date, minutes);
+});
+weekGrid.addEventListener('keydown', event => {
+  if(event.key !== 'Enter' && event.key !== ' ') return;
+  const card = event.target.closest('.calendar-event');
+  if(card){ event.preventDefault(); openEvent(card.dataset.id, card.dataset.date); }
+});
+function openEvent(id, key){
+  const item = classes.find(c => c.id === id);
+  if(!item) return;
+  selectedEvent = item;
+  document.getElementById('eventTitle').textContent = item.subject;
+  document.getElementById('eventRecurrence').textContent = CYCLE_DAYS.includes(item.day)
+    ? `${item.day} · repeats every 10 school days` : `${item.day} · repeats weekly`;
+  document.getElementById('eventDate').textContent = localDate(key).toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  document.getElementById('eventTime').textContent = `${formatTime(item.start)} – ${formatTime(item.end)}`;
+  document.getElementById('eventRoom').textContent = item.room ? `Room / location: ${item.room}` : 'No room or location added';
+  document.getElementById('eventMessage').textContent = '';
+  eventDialog.showModal();
+}
+document.getElementById('deleteEventBtn').addEventListener('click', async event => {
+  if(!selectedEvent) return;
+  const id = selectedEvent.id;
+  event.target.disabled = true;
   try{
-    await api('/api/classes/delete', {id:btn.dataset.id});
-    classes = classes.filter(c => c.id !== btn.dataset.id);
-    buildDayUi();
+    await api('/api/classes/delete', {id});
+    classes = classes.filter(c => c.id !== id);
+    selectedEvent = null;
+    eventDialog.close();
     render();
-  }catch(error){ alert(error.message); }
+    settingsMessage.textContent = 'Repeating class deleted.';
+  }catch(error){ document.getElementById('eventMessage').textContent = error.message; }
+  finally{ event.target.disabled = false; }
 });
-
+function minutesFor(value){ const [hours, minutes] = value.split(':').map(Number); return hours * 60 + minutes; }
+function timeValue(minutes){ return `${String(Math.floor(minutes / 60)).padStart(2,'0')}:${String(minutes % 60).padStart(2,'0')}`; }
 function formatTime(value){
   const [hour, minute] = value.split(':').map(Number);
   return `${hour % 12 || 12}:${String(minute).padStart(2,'0')} ${hour >= 12 ? 'PM' : 'AM'}`;
@@ -361,59 +522,104 @@ function escapeHtml(value){
   div.textContent = value;
   return div.innerHTML;
 }
-function renderClassItem(c, deletable=true){
+function renderClassItem(c, date){
   const item = document.createElement('div');
-  item.className = `class-item color-${c.color}`;
-  item.innerHTML = `
-    <div class="class-info">
-      <div class="class-subject">${escapeHtml(c.subject)}</div>
-      <div class="class-meta">
-        <span class="class-time">${formatTime(c.start)} – ${formatTime(c.end)}</span>
-        ${c.room ? `<span>📍 ${escapeHtml(c.room)}</span>` : ''}
-        ${deletable ? '' : `<span>${c.day}</span>`}
-      </div>
-    </div>
-    ${deletable ? `<button type="button" class="class-delete" data-id="${c.id}" aria-label="Delete class">✕</button>` : ''}`;
+  item.className = `class-item calendar-event color-${c.color}`;
+  item.dataset.id = c.id;
+  item.dataset.date = dateKey(date);
+  item.tabIndex = 0;
+  item.setAttribute('role', 'button');
+  const label = `${c.subject}, ${formatTime(c.start)} to ${formatTime(c.end)}${c.room ? ', ' + c.room : ''}`;
+  item.setAttribute('aria-label', label);
+  item.title = label;
+  item.innerHTML = `<div class="class-info"><div class="class-subject">${escapeHtml(c.subject)}</div><div class="class-meta"><span class="class-time">${formatTime(c.start)} – ${formatTime(c.end)}</span>${c.room ? `<span class="class-room">${escapeHtml(c.room)}</span>` : ''}</div></div>`;
   return item;
 }
-
+// Assign lanes within each connected group of overlapping events.
+function layoutEvents(items){
+  const sorted = [...items].sort((a,b) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end));
+  const result = [];
+  let group = [], groupEnd = -1, ends = [];
+  const finish = () => { group.forEach(entry => {entry.lanes = ends.length; result.push(entry);}); };
+  sorted.forEach(item => {
+    const start = minutesFor(item.start), end = minutesFor(item.end);
+    if(start >= groupEnd){ finish(); group = []; ends = []; groupEnd = -1; }
+    let lane = ends.findIndex(value => value <= start);
+    if(lane < 0) lane = ends.length;
+    ends[lane] = end;
+    group.push({item, lane, lanes:0});
+    groupEnd = Math.max(groupEnd, end);
+  });
+  finish();
+  return result;
+}
 function render(){
-  const today = mode === 'weekly' ? todayName() : cycleDayFor(new Date());
   const visible = visibleClasses();
-  currentDays().forEach(day => {
-    const col = dayCols[day];
-    col.el.classList.toggle('is-today', day === today);
-    const items = visible.filter(c => c.day === day).sort((a,b) => a.start.localeCompare(b.start));
+  gridStart = Math.min(7 * 60, ...visible.map(c => Math.floor(minutesFor(c.start) / 60) * 60));
+  gridEnd = Math.max(18 * 60, ...visible.map(c => Math.ceil(minutesFor(c.end) / 60) * 60));
+  const height = (gridEnd - gridStart) / 60 * HOUR_HEIGHT;
+  const canvas = document.getElementById('calendarCanvas');
+  canvas.style.setProperty('--grid-height', `${height}px`);
+  canvas.style.setProperty('--hour-height', `${HOUR_HEIGHT}px`);
+  const gutter = document.getElementById('timeGutter');
+  gutter.replaceChildren();
+  for(let minutes = gridStart; minutes < gridEnd; minutes += 60){
+    const label = document.createElement('span');
+    label.className = 'time-label';
+    label.style.top = `${(minutes-gridStart) / 60 * HOUR_HEIGHT}px`;
+    label.textContent = formatTime(timeValue(minutes)).replace(':00', '');
+    gutter.appendChild(label);
+  }
+  const query = calendarSearch.value.trim().toLowerCase();
+  const now = new Date();
+  Object.entries(dayCols).forEach(([key, col]) => {
     col.list.replaceChildren();
-    if(items.length) items.forEach(item => col.list.appendChild(renderClassItem(item)));
-    else {
+    const items = classesForDate(col.date).filter(c => !query || `${c.subject} ${c.room}`.toLowerCase().includes(query));
+    layoutEvents(items).forEach(({item, lane, lanes}) => {
+      const card = renderClassItem(item, col.date);
+      card.style.top = `${(minutesFor(item.start)-gridStart) / 60 * HOUR_HEIGHT}px`;
+      card.style.height = `${Math.max(22, (minutesFor(item.end)-minutesFor(item.start)) / 60 * HOUR_HEIGHT - 2)}px`;
+      card.style.left = `calc(${lane / lanes * 100}% + 3px)`;
+      card.style.width = `calc(${100 / lanes}% - 6px)`;
+      col.list.appendChild(card);
+    });
+    if(!items.length){
       const empty = document.createElement('p');
       empty.className = 'day-col-empty';
-      empty.textContent = 'No classes';
+      empty.textContent = query ? 'No matches' : 'No classes';
       col.list.appendChild(empty);
+    }
+    const minutesNow = now.getHours() * 60 + now.getMinutes();
+    if(key === dateKey(now) && minutesNow >= gridStart && minutesNow < gridEnd){
+      const line = document.createElement('div');
+      line.className = 'now-line';
+      line.style.top = `${(minutesNow-gridStart) / 60 * HOUR_HEIGHT}px`;
+      line.setAttribute('aria-label', `Current time ${formatTime(timeValue(minutesNow))}`);
+      col.list.appendChild(line);
     }
   });
   renderNextUp();
 }
-
 function renderNextUp(){
-  // Upcoming classes follow actual dates, regardless of the selected view/week.
-  const items = classes;
-  if(!items.length){ nextUp.textContent = 'Add some classes to see what\'s next.'; return; }
+  if(!classes.length){ nextUp.textContent = 'A clear calendar. Create a class or import your timetable to get started.'; return; }
   const now = new Date();
   const clock = now.toTimeString().slice(0,5);
-  let next = null;
+  let next = null, nextDate = null;
   for(let offset=0; offset<22 && !next; offset++){
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
-    date.setDate(date.getDate()+offset);
-    const cycleDay = cycleDayFor(date);
-    const weekday = WEEK_DAYS[(date.getDay() + 6) % 7];
-    next = items.filter(c => (c.day === cycleDay || c.day === weekday) && (offset > 0 || c.start > clock))
+    const date = addDays(now, offset);
+    next = classesForDate(date).filter(c => offset > 0 || c.end > clock)
       .sort((a,b) => a.start.localeCompare(b.start))[0] || null;
+    if(next) nextDate = date;
   }
-  nextUp.replaceChildren();
-  if(next) nextUp.appendChild(renderClassItem(next, false));
-  else nextUp.textContent = 'No upcoming classes found.';
+  if(!next){ nextUp.textContent = 'No upcoming classes found. Check your Day 1 date in settings.'; return; }
+  const when = dateKey(nextDate) === dateKey(now)
+    ? (next.start <= clock ? 'Now' : 'Today')
+    : nextDate.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'});
+  nextUp.textContent = `${next.subject} · ${when}, ${formatTime(next.start)} – ${formatTime(next.end)}${next.room ? ' · ' + next.room : ''}`;
+}
+function scrollToSchoolStart(){
+  const firstStart = Math.min(8 * 60, ...visibleClasses().map(c => minutesFor(c.start)));
+  calendarScroll.scrollTop = Math.max(0, (firstStart - gridStart - 30) / 60 * HOUR_HEIGHT);
 }
 
 function makePreviewRow(item){
@@ -534,12 +740,13 @@ document.getElementById('importForm').addEventListener('submit', async e => {
       cycleStart:importDayOne.value, classes:importedClasses
     }, previewRows.querySelector('.preview-start'), async result => {
       await loadSchedule();
-      activeDay = currentDay();
-      setActiveDay(activeDay);
       previewPanel.hidden = true;
       pdfMessage.textContent = `Imported ${result.imported} classes.${result.skipped ? ` Skipped ${result.skipped} duplicates.` : ''}`
         + (result.replaced ? ` Replaced ${result.replaced} overlapping ${result.replaced === 1 ? 'class' : 'classes'}.` : '');
       pdfFile.value = '';
+      settingsMessage.textContent = pdfMessage.textContent;
+      importDialog.close();
+      scrollToSchoolStart();
     }, previewError);
   }
   finally{ confirmImport.disabled = false; confirmImport.textContent = 'Import classes'; }
@@ -552,8 +759,14 @@ async function start(){
     if(!response.ok) throw new Error('Could not load your account.');
     const session = await response.json();
     BellhopSession.set(true);
-    document.getElementById('userGreet').textContent = `Hey, ${session.name}`;
+    document.getElementById('userGreet').textContent = session.name;
     await loadSchedule();
+    scrollToSchoolStart();
+    setInterval(() => {
+      if(document.hidden) return;
+      buildCalendar();
+      render();
+    }, 60000);
   }catch(error){ nextUp.textContent = error.message; }
 }
 

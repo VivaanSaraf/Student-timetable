@@ -3,37 +3,52 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bellhop — Your Schedule, Sorted</title>
-<script src="session-ui.js?v=10"></script>
+<meta name="theme-color" content="#1b1b1b">
+<title>Bellhop Calendar — Your Schedule, Sorted</title>
+<script src="session-ui.js?v=13"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
-<body>
+<body class="calendar-app">
 
-<header class="site-header">
-  <div class="header-side">
-    <button type="button" class="btn btn-ghost btn-home" id="homeBtn">← Home</button>
-  </div>
-  <div class="header-center">
-    <div class="brand">
-      <span class="brand-mark">⏱</span> Bell<span class="accent-green">hop</span>
-    </div>
-    <p class="tagline">your schedule, sorted <span class="dot-red">•</span></p>
-  </div>
-  <div class="header-side header-side-right">
-    <span class="user-greet" id="userGreet"></span>
-    <button type="button" class="btn btn-ghost btn-logout" id="logoutBtn">Log out</button>
-  </div>
+<header class="app-header">
+  <a class="brand" href="index.html" aria-label="Bellhop home"><span class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 11h18M8 15h2m4 0h2M8 18h2"/></svg></span><span class="brand-name">Bellhop <span>Calendar</span></span></a>
+  <div class="header-actions"><span id="userGreet" class="user-greet"></span><button class="btn btn-ghost" id="homeBtn" type="button">Home</button><button class="btn btn-ghost" id="logoutBtn" type="button">Log out</button></div>
 </header>
-
 <div class="page-shell">
+  <main class="calendar-main" id="timetable" aria-label="Your timetable calendar">
+    <div class="calendar-toolbar">
+      <div class="calendar-navigation">
+        <button class="btn btn-secondary" id="todayBtn" type="button">Today</button>
+        <button class="icon-btn" id="prevWeekBtn" type="button" aria-label="Previous week" title="Previous week"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button>
+        <button class="icon-btn" id="nextWeekBtn" type="button" aria-label="Next week" title="Next week"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button>
+        <div class="calendar-heading"><h1 id="calendarTitle">Your calendar</h1><p id="calendarRange"></p></div>
+      </div>
+      <div class="calendar-tools">
+        <label class="calendar-search"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span class="sr-only">Search subjects or rooms</span><input id="calendarSearch" type="search" placeholder="Search classes" autocomplete="off"></label>
+        <label class="sr-only" for="scheduleMode">Calendar view</label>
+        <select id="scheduleMode" disabled><option value="weekly">Week</option><option value="cycle">10-day cycle</option></select>
+        <button class="icon-btn" id="openSettingsBtn" type="button" aria-label="Calendar settings" title="Calendar settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="m10 3-.7 2.2-2 .9L5 5.6 3 9l1.6 1.7v2.6L3 15l2 3.4 2.3-.5 2 .9L10 21h4l.7-2.2 2-.9 2.3.5 2-3.4-1.6-1.7v-2.6L21 9l-2-3.4-2.3.5-2-.9L14 3Z"/></svg></button>
+        <button class="btn btn-secondary" id="openImportBtn" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4"/></svg><span>Import</span></button>
+        <button class="btn btn-primary" id="openClassBtn" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Create</span></button>
+      </div>
+    </div>
+    <div class="next-strip"><span class="next-label"><span class="live-dot"></span>Next up</span><div id="nextUp" class="next-up" aria-live="polite">Loading your timetable…</div></div>
+    <div class="calendar-context"><p id="calendarContext">Your week, at a glance.</p><p id="settingsMessage" role="status"></p></div>
+    <div class="calendar-scroll" id="calendarScroll" tabindex="0" aria-label="Calendar time grid. Scroll to see more times or days.">
+      <div class="calendar-canvas" id="calendarCanvas">
+        <div class="calendar-day-headers" id="calendarHeaders"></div>
+        <div class="calendar-timeline" id="calendarTimeline"><div class="time-gutter" id="timeGutter" aria-hidden="true"></div><div id="weekGrid" class="week-grid"></div></div>
+      </div>
+    </div>
+    <p class="calendar-footnote">Click a class for details · Click an empty time to create a class · Repeating classes stay on your timetable</p>
+  </main>
+</div>
 
-  <!-- CLASS TOOLS -->
-  <aside class="sidebar">
-    <section class="card add-card" aria-labelledby="add-heading">
-      <h2 id="add-heading">➕ Add a class</h2>
+<dialog class="tool-dialog" id="classDialog" aria-labelledby="add-heading">
+  <div class="dialog-heading"><div><h2 id="add-heading">Create a class</h2><p>A little structure for your school day.</p></div><button type="button" class="icon-btn" data-close="classDialog" aria-label="Close create class"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
       <form id="classForm" class="class-form">
         <div class="field">
           <label for="subject">Subject</label>
@@ -80,8 +95,8 @@
         </div>
 
         <div class="field">
-          <label for="color">Colour tag</label>
-          <div class="color-picker" id="colorPicker">
+          <span class="field-label" id="colorLabel">Colour tag</span>
+          <div class="color-picker" id="colorPicker" role="group" aria-labelledby="colorLabel">
             <button type="button" class="swatch swatch-green selected" data-color="green" aria-label="Green"></button>
             <button type="button" class="swatch swatch-red" data-color="red" aria-label="Red"></button>
             <button type="button" class="swatch swatch-white" data-color="white" aria-label="White"></button>
@@ -92,61 +107,18 @@
         <p id="classMessage" class="import-message form-wide" role="status"></p>
         <button type="submit" id="addClassBtn" class="btn btn-primary form-wide">Add to timetable</button>
       </form>
-    </section>
+</dialog>
 
-    <section class="card import-card" aria-labelledby="import-heading">
-      <h2 id="import-heading">📄 Import a timetable</h2>
+<dialog class="tool-dialog import-dialog" id="importDialog" aria-labelledby="import-heading">
+  <div class="dialog-heading"><div><h2 id="import-heading">Import your timetable</h2><p>From a PDF or screenshot to your calendar.</p></div><button type="button" class="icon-btn" data-close="importDialog" aria-label="Close import"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
+  <div class="import-card">
       <p class="import-help">Upload a PDF or a clear screenshot (PNG or JPG), up to 5 MB. Keep day labels and class times visible, then check each class before saving.</p>
       <label for="pdfFile">Timetable PDF or screenshot</label>
       <input id="pdfFile" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg">
       <button id="previewPdfBtn" type="button" class="btn btn-primary">Preview classes</button>
       <p id="pdfMessage" class="import-message" role="status"></p>
-    </section>
 
-    <section class="card next-card" aria-labelledby="next-heading">
-      <h2 id="next-heading">⏭ Next up</h2>
-      <div id="nextUp" class="next-up">
-        <p class="empty-state">Add some classes to see what's next.</p>
-      </div>
-    </section>
-  </aside>
-
-  <!-- TIMETABLE -->
-  <main class="card timetable-card" id="timetable" aria-labelledby="tt-heading">
-    <div class="tt-header">
-      <h2 id="tt-heading">📅 Your Timetable</h2>
-      <div class="tt-actions">
-        <button id="clearAllBtn" class="btn btn-ghost" type="button">Clear all</button>
-      </div>
-    </div>
-
-    <div class="schedule-settings">
-      <div class="field">
-        <label for="scheduleMode">View</label>
-        <select id="scheduleMode">
-          <option value="weekly">Weekly</option>
-          <option value="cycle">10-day cycle</option>
-        </select>
-      </div>
-      <div class="field" id="cycleWeekField" hidden>
-        <label for="cycleWeek">Cycle week</label>
-        <select id="cycleWeek" aria-describedby="weeklyCycleHint">
-          <option value="0">Week 1 · Days 1–5</option>
-          <option value="1">Week 2 · Days 6–10</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="cycleStart">Date of Day 1</label>
-        <input id="cycleStart" type="date" aria-describedby="cycleHint">
-      </div>
-      <p id="cycleHint">The cycle skips weekends. Set a new Day 1 after school holidays.</p>
-    </div>
-    <p id="weeklyCycleHint" class="form-help" hidden>Week 1 shows Days 1–5 from Monday to Friday. Week 2 shows Days 6–10. Classes still repeat every 10 school days.</p>
-    <p id="settingsMessage" class="import-message" role="status"></p>
-
-    <div class="day-tabs" id="dayTabs"></div>
-    <div id="weekGrid" class="week-grid"></div>
-
+  </div>
     <section class="import-preview" id="importPreview" aria-labelledby="previewHeading" hidden>
       <div class="preview-heading">
         <h3 id="previewHeading">Check your classes</h3>
@@ -167,13 +139,25 @@
         </div>
       </form>
     </section>
-  </main>
+</dialog>
 
-</div>
+<dialog class="tool-dialog settings-dialog" id="settingsDialog" aria-labelledby="settings-heading">
+  <div class="dialog-heading"><div><h2 id="settings-heading">Calendar settings</h2><p>Keep your calendar in step with school.</p></div><button type="button" class="icon-btn" data-close="settingsDialog" aria-label="Close settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
+  <div class="field"><label for="jumpDate">Go to a date</label><input type="date" id="jumpDate"><p class="form-help">Jump straight to any week in your timetable.</p></div>
+  <form id="cycleSettingsForm">
+    <div class="field"><label for="cycleStart">Date of Day 1</label><input type="date" id="cycleStart" required aria-describedby="cycleHint"><p class="form-help" id="cycleHint">The 10-day cycle skips weekends. Reset Day 1 after a school holiday if your cycle pauses.</p></div>
+    <p id="cycleSettingsMessage" class="import-message" role="status"></p>
+    <button class="btn btn-primary" id="saveCycleBtn" type="submit">Save Day 1 date</button>
+  </form>
+  <div class="settings-danger"><h3>Clear this timetable</h3><p class="form-help">Remove all weekly and 10-day cycle classes. You can import a new timetable afterwards.</p><button id="clearAllBtn" class="btn btn-danger" type="button">Clear all classes</button></div>
+</dialog>
 
-<footer class="site-footer">
-  <p>© 2026 Bellhop. Built by Vivaan Saraf.</p>
-</footer>
+<dialog class="tool-dialog event-dialog" id="eventDialog" aria-labelledby="eventTitle">
+  <div class="dialog-heading"><div><p class="eyebrow" id="eventRecurrence"></p><h2 id="eventTitle"></h2></div><button type="button" class="icon-btn" data-close="eventDialog" aria-label="Close class details"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
+  <div class="event-detail-body"><p id="eventDate" class="event-detail-row"></p><p id="eventTime" class="event-detail-row"></p><p id="eventRoom" class="event-detail-row"></p><p class="form-help">This is a repeating class. Deleting it removes it from every future repeat.</p></div>
+  <p id="eventMessage" class="import-message" role="status"></p>
+  <div class="event-actions"><button type="button" class="btn btn-danger" id="deleteEventBtn">Delete class</button><button type="button" class="btn btn-secondary" data-close="eventDialog">Done</button></div>
+</dialog>
 
 <dialog id="clashDialog" class="clash-dialog" aria-labelledby="clashTitle" aria-describedby="clashDescription">
   <span class="clash-icon" aria-hidden="true">!</span>
@@ -186,7 +170,6 @@
     <form method="dialog"><button class="btn btn-ghost" id="changeTimeBtn" autofocus>Change time</button></form>
   </div>
 </dialog>
-
-<script src="script.js?v=12"></script>
+<script src="script.js?v=13"></script>
 </body>
 </html>

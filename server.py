@@ -372,7 +372,7 @@ class Handler(SimpleHTTPRequestHandler):
                 mode = data.get("mode")
                 if mode not in ("weekly", "cycle"):
                     raise ValueError("Invalid timetable mode.")
-                if mode == "cycle":
+                if mode == "cycle" or data.get("cycleStart"):
                     cycle_start = validate_cycle_start(data.get("cycleStart"))
                     db.execute("UPDATE users SET schedule_mode = ?, cycle_start = ? WHERE username = ?",
                                (mode, cycle_start, username))
