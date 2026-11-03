@@ -17,7 +17,10 @@ import storage
 class SchoolCalendarApiTests(unittest.TestCase):
     FEED_URL = 'https://school.example/calendar.ics?accessToken=private-test-token'
     EVENTS = [{'id': 'holiday-1', 'title': 'SPTM (MYP)', 'start': '2026-11-04',
-               'end': '2026-11-06', 'noSchool': True, 'reason': 'Student holiday'}]
+               'end': '2026-11-06', 'noSchool': True, 'reason': 'Student holiday',
+               'allDay': True, 'description': '', 'startTime': None, 'endTime': None,
+               'startDateTime': None, 'endDateTime': None, 'location': '', 'url': '',
+               'taskType': '', 'className': '', 'createdBy': ''}]
 
     @classmethod
     def setUpClass(cls):
@@ -148,6 +151,62 @@ class SchoolCalendarApiTests(unittest.TestCase):
         self.assertEqual(self.state()[1]['events'], changed)
         self.assertEqual(self.state()[1]['events'], changed)
         self.assertEqual(self.fetch.call_count, 2)
+
+    def test_get_upgrades_legacy_event_details_without_reconnecting(self):
+        self.subscribe()
+        old_events = [{key: value for key, value in event.items()
+                       if key not in ('allDay', 'description')} for event in self.EVENTS]
+        with storage.database() as db:
+            db.execute('UPDATE school_calendars SET events_json = ? WHERE username = ?',
+                       (json.dumps(old_events), self.username))
+            db.commit()
+        details = [{**self.EVENTS[0], 'description': 'Task Type: Assessment\nClasses: Design',
+                    'startTime': '15:00', 'endTime': '15:30', 'allDay': False,
+                    'taskType': 'Assessment', 'className': 'Design', 'createdBy': 'Teacher',
+                    'url': 'https://share.toddleapp.com/tiny/example'}]
+        self.parse.return_value = details
+        status, result = self.state()
+        self.assertEqual(status, 200)
+        self.assertEqual(result['events'], details)
+        self.assertTrue(result['connected'])
+        self.assertNotIn('private-test-token', json.dumps(result))
+        self.assertEqual(self.state()[1]['events'], details)
+        self.assertEqual(self.fetch.call_count, 2)
+
+    def test_failed_metadata_upgrade_preserves_cache_and_waits_before_retry(self):
+        self.subscribe()
+        old_events = [{key: value for key, value in event.items() if key != 'description'}
+                      for event in self.EVENTS]
+        with storage.database() as db:
+            db.execute('UPDATE school_calendars SET events_json = ? WHERE username = ?',
+                       (json.dumps(old_events), self.username))
+            db.commit()
+        self.fetch.side_effect = TimeoutError(self.FEED_URL)
+        status, result = self.state()
+        self.assertEqual(status, 200)
+        self.assertEqual(result['events'], old_events)
+        self.assertEqual(result['error'], server.CALENDAR_REFRESH_ERROR)
+        self.assertNotIn('private-test-token', json.dumps(result))
+        self.assertEqual(self.state()[1], result)
+        self.assertEqual(self.fetch.call_count, 2)
+
+        # Once the normal retry interval elapses, try the upgrade again.
+        self.fetch.side_effect = None
+        with storage.database() as db:
+            db.execute('UPDATE school_calendars SET checked_at = 0 WHERE username = ?',
+                       (self.username,))
+            db.commit()
+        retried = self.state()[1]
+        self.assertEqual(retried['events'], self.EVENTS)
+        self.assertIsNone(retried['error'])
+        self.assertEqual(self.fetch.call_count, 3)
+
+    def test_empty_calendar_does_not_trigger_metadata_upgrade(self):
+        self.parse.return_value = []
+        self.subscribe()
+        self.assertEqual(self.state()[1]['events'], [])
+        self.assertEqual(self.state()[1]['events'], [])
+        self.assertEqual(self.fetch.call_count, 1)
 
     def test_account_isolation_and_disconnect_preserves_classes(self):
         self.subscribe()

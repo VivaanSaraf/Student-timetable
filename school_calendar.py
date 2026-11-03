@@ -7,6 +7,8 @@ import re
 import socket
 import ssl
 from datetime import date, datetime, time, timedelta
+from html import unescape
+from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
@@ -17,6 +19,7 @@ MAX_FEED_BYTES = 5 * 1024 * 1024
 MAX_EVENTS = 2000
 FETCH_TIMEOUT = 12
 FETCH_ERROR = 'Could not read that calendar. Check the subscription link and try again.'
+MAX_DESCRIPTION = 20000
 
 
 def _is_public_address(address):
@@ -169,6 +172,135 @@ def _event_dates(event, timezone):
     return start, end
 
 
+def safe_event_url(value):
+    """A feed may supply links, but only ordinary web links reach the UI."""
+    if not isinstance(value, str) or len(value) > 8192:
+        return ''
+    if any(ord(char) < 32 or ord(char) == 127 for char in value) or '\\' in value:
+        return ''
+    value = value.strip()
+    if not value or any(char.isspace() for char in value):
+        return ''
+    try:
+        parsed = urlsplit(value)
+        if (parsed.scheme.lower() not in ('https', 'http') or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None):
+            return ''
+        parsed.port  # Validate a supplied port without changing the task link.
+    except ValueError:
+        return ''
+    return value
+
+
+class _DescriptionText(HTMLParser):
+    """Reduce rich descriptions to text; never fetch or execute feed markup."""
+    BLOCK_TAGS = {'p', 'div', 'li', 'tr', 'table', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.skipped = 0
+        self.anchor = ''
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self.skipped += 1
+            return
+        if self.skipped:
+            return
+        if tag == 'br' or tag in self.BLOCK_TAGS:
+            self.parts.append('\n')
+        if tag == 'a':
+            self.anchor = safe_event_url(dict(attrs).get('href', ''))
+
+    def handle_startendtag(self, tag, attrs):
+        if tag not in ('script', 'style'):
+            self.handle_starttag(tag, attrs)
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style'):
+            self.skipped = max(0, self.skipped - 1)
+            return
+        if self.skipped:
+            return
+        if tag == 'a' and self.anchor:
+            # Preserve hrefs when the clickable text says only "View task".
+            if not self.parts or self.anchor not in self.parts[-1]:
+                self.parts.append(' ' + self.anchor)
+            self.anchor = ''
+        if tag in self.BLOCK_TAGS:
+            self.parts.append('\n')
+
+    def handle_data(self, data):
+        if not self.skipped:
+            self.parts.append(data)
+
+
+def _plain_text(value, limit=MAX_DESCRIPTION):
+    value = str(value or '')[:limit * 4]
+    if re.search(r'<(?:p|div|br|span|strong|em|b|i|a|ul|ol|li|table|tr|td|h[1-6]|script|style)(?:\s|/?>)', value, re.I):
+        parser = _DescriptionText()
+        parser.feed(value)
+        parser.close()
+        value = ''.join(parser.parts)
+    value = unescape(value).replace('\xa0', ' ').replace('\r\n', '\n').replace('\r', '\n')
+    value = re.sub(r'[ \t]+\n', '\n', value)
+    value = re.sub(r'\n[ \t]+', '\n', value)
+    value = re.sub(r'\n{3,}', '\n\n', value)
+    return value.strip()[:limit]
+
+
+def _description_fields(description):
+    # Match only whole labels at the start of lines, keeping e.g. "Criterion D:"
+    # and multiline assessment instructions inside the Description field.
+    labels = list(re.finditer(
+        r'(?im)^[ \t]*(Task[ \t]+Type|Class(?:es)?|Description|Created[ \t]+By|View[ \t]+Task)[ \t]*:[ \t]*',
+        description))
+    fields = {}
+    for index, match in enumerate(labels):
+        end = labels[index + 1].start() if index + 1 < len(labels) else len(description)
+        key = re.sub(r'\s+', ' ', match.group(1)).lower()
+        fields.setdefault(key, description[match.end():end].strip())
+    task_url = fields.get('view task', '')
+    url = safe_event_url(task_url)
+    if not url and not re.match(r'^[a-z][a-z0-9+.-]*:', task_url, re.I):
+        match = re.search(r'https?://[^\s<>\"\']+', task_url, re.I)
+        if match:
+            url = safe_event_url(match.group())
+    return {
+        'taskType': fields.get('task type', '')[:500],
+        'className': (fields.get('classes') or fields.get('class', ''))[:1000],
+        'createdBy': fields.get('created by', '')[:500],
+        'taskDescription': fields.get('description', '')[:MAX_DESCRIPTION],
+        'url': url,
+    }
+
+
+def _event_metadata(event, timezone):
+    start = event.decoded('DTSTART')
+    end = event.decoded('DTEND', None)
+    all_day = not isinstance(start, datetime)
+    start_datetime = end_datetime = None
+    if not all_day:
+        start_datetime = (start if start.tzinfo else start.replace(tzinfo=timezone)).astimezone(timezone)
+        if isinstance(end, datetime):
+            end_datetime = (end if end.tzinfo else end.replace(tzinfo=timezone)).astimezone(timezone)
+    description = _plain_text(event.get('DESCRIPTION', '') or event.get('X-ALT-DESC', ''))
+    fields = _description_fields(description)
+    fields['url'] = safe_event_url(str(event.get('URL', ''))) or fields['url']
+    return {
+        'allDay': all_day,
+        'startTime': start_datetime.strftime('%H:%M') if start_datetime else None,
+        'endTime': end_datetime.strftime('%H:%M') if end_datetime else None,
+        'startDateTime': start_datetime.isoformat(timespec='seconds') if start_datetime else None,
+        'endDateTime': end_datetime.isoformat(timespec='seconds') if end_datetime else None,
+        'description': description,
+        'location': _plain_text(event.get('LOCATION', ''), limit=1000),
+        **fields,
+    }
+
+
 def parse_school_events(content, timezone='Asia/Kolkata', today=None):
     """Expand a bounded school calendar into date ranges (end is exclusive)."""
     if not isinstance(content, (str, bytes)) or len(content) > MAX_FEED_BYTES:
@@ -216,7 +348,8 @@ def parse_school_events(content, timezone='Asia/Kolkata', today=None):
             reason = holiday_reason(title)
             events.append({'id': identifier, 'title': title,
                            'start': first.isoformat(), 'end': end.isoformat(),
-                           'noSchool': bool(reason), 'reason': reason})
+                           'noSchool': bool(reason), 'reason': reason,
+                           **_event_metadata(component, tz)})
             if len(events) > MAX_EVENTS:
                 raise ValueError('The calendar contains too many events in the current school years.')
         return sorted(events, key=lambda event: (event['start'], event['title'], event['id']))

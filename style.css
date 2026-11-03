@@ -343,3 +343,20 @@ input[type=file]::file-selector-button{font:inherit;background:#2a2a2a;border:0;
   .holiday-overlay p{font-size:13px;}
   .school-calendar-settings{padding:13px;}
 }
+
+/* Preserve each subscribed task's details, with Bellhop's existing theme. */
+.event-dialog:has(.school-event-details:not([hidden])){width:min(620px,calc(100vw - 32px));}
+.school-event-details{display:flex;flex-direction:column;gap:22px;min-width:0;}
+.event-task-details{display:flex;flex-direction:column;gap:11px;}
+.event-task-details>div{display:grid;grid-template-columns:92px minmax(0,1fr);gap:12px;font-size:13px;line-height:1.6;}
+.event-task-details dt{color:var(--white-dim);}
+.event-task-details dd{color:var(--white);overflow-wrap:anywhere;}
+.event-description-section h3{font-size:13px;color:var(--white-dim);font-weight:500;margin-bottom:10px;}
+.event-description{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.8;color:var(--white);}
+.event-task-link{align-self:flex-start;white-space:normal;text-align:left;line-height:1.5;}
+.event-calendar-source{font-size:11px;color:var(--white-dim);}
+@media(max-width:480px){
+  .event-task-details>div{grid-template-columns:76px minmax(0,1fr);gap:9px;font-size:12px;}
+  .event-description{font-size:12px;}
+  .event-dialog:has(.school-event-details:not([hidden])){width:calc(100vw - 24px);}
+}

@@ -29,6 +29,8 @@ class Element {
   appendChild(child){ this.children.push(child); return child; }
   replaceChildren(...children){ this.children = children; this.text = ''; this.markup = undefined; }
   setAttribute(name, value){ this.attributes[name] = value; }
+  removeAttribute(name){ delete this.attributes[name]; delete this[name]; }
+  getAttribute(name){ return this.attributes[name] ?? null; }
   querySelectorAll(){ return []; }
   querySelector(){ return new Element(); }
   addEventListener(name, callback){ (this.listeners[name] ||= []).push(callback); }
@@ -54,6 +56,7 @@ const narrowScreen = {matches:false, listeners:[], addEventListener(name, callba
 const context = vm.createContext({
   Date:FrozenDate,
   Intl,
+  URL,
   document:{getElementById:element, createElement:tag => new Element(tag), createTextNode:text => text,
     querySelector:selector => element(selector), querySelectorAll:() => [], addEventListener(){}},
   window:{location:{}, addEventListener(){}, innerWidth:1200, matchMedia:() => narrowScreen},
@@ -156,3 +159,94 @@ assert.equal(run('classes.length'), 10);
 // Status rendering never reflects a token-bearing URL, even in unknown fields.
 run("setSchoolCalendarState({connected:true,events:[],lastSynced:1793664000,error:null,timezone:'Asia/Kolkata',source:'School calendar',url:'https://school.example/private.ics?accessToken=private-synthetic-token'});");
 assert.doesNotMatch([...elements.values()].map(item => item.textContent + item.innerHTML).join(' '), /private-synthetic-token/);
+
+// Rich details are driven by every task's own metadata, never a hardcoded task.
+run(`
+  taskOne = {
+    id:'task-one', title:'SA-Crit CD', start:'2026-11-24', end:'2026-11-25',
+    allDay:false, startTime:'15:00', endTime:'15:30',
+    startDateTime:'2026-11-24T15:00:00+05:30', endDateTime:'2026-11-24T15:30:00+05:30',
+    noSchool:false, reason:'', taskType:'Summative Assessment',
+    className:'MYP3 Design 1', createdBy:'Example Design Teacher',
+    description:'Task Type: Summative Assessment\\nClasses: MYP3 Design 1\\nDescription: Criterion C: Creating a solution\\nCriterion D: Evaluating\\nCreated By: Example Design Teacher',
+    taskDescription:'Criterion C: Creating a solution\\nCriterion D: Evaluating',
+    location:'Design studio', url:'https://share.toddleapp.com/tiny/design-task'
+  };
+  taskTwo = {
+    id:'task-two', title:'Science Investigation', start:'2026-11-25', end:'2026-11-26',
+    allDay:false, startTime:'09:15', endTime:'10:00',
+    startDateTime:'2026-11-25T09:15:00+05:30', endDateTime:'2026-11-25T10:00:00+05:30',
+    noSchool:false, reason:'', taskType:'Formative Assessment',
+    className:'MYP3 Science 2', createdBy:'Example Science Teacher',
+    description:'Explain the experiment and record your results.',
+    taskDescription:'Explain the experiment and record your results.',
+    location:'Science laboratory', url:'https://share.toddleapp.com/tiny/science-task'
+  };
+  openSchoolEvent(taskOne);
+`);
+assert.equal(element('eventTitle').textContent, 'SA-Crit CD');
+assert.match(element('eventDate').textContent, /24 November 2026/);
+assert.match(element('eventTime').textContent, /3:00 PM.*3:30 PM/);
+assert.equal(element('schoolEventDetails').hidden, false);
+assert.equal(element('eventTaskType').textContent, 'Summative Assessment');
+assert.equal(element('eventClassName').textContent, 'MYP3 Design 1');
+assert.equal(element('eventCreatedBy').textContent, 'Example Design Teacher');
+assert.match(element('eventDescription').textContent, /Criterion C: Creating a solution/);
+assert.match(element('eventDescription').textContent, /Criterion D: Evaluating/);
+assert.equal(element('eventTaskLink').hidden, false);
+const linkHref = () => element('eventTaskLink').href || element('eventTaskLink').getAttribute('href');
+assert.equal(linkHref(), 'https://share.toddleapp.com/tiny/design-task');
+assert.equal(element('deleteEventBtn').hidden, true);
+run('eventDialog.close(); openSchoolEvent(taskTwo);');
+assert.equal(element('eventTitle').textContent, 'Science Investigation');
+assert.match(element('eventDate').textContent, /25 November 2026/);
+assert.match(element('eventTime').textContent, /9:15 AM.*10:00 AM/);
+assert.equal(element('eventTaskType').textContent, 'Formative Assessment');
+assert.equal(element('eventClassName').textContent, 'MYP3 Science 2');
+assert.equal(element('eventCreatedBy').textContent, 'Example Science Teacher');
+assert.equal(element('eventDescription').textContent, 'Explain the experiment and record your results.');
+assert.equal(linkHref(), 'https://share.toddleapp.com/tiny/science-task');
+assert.doesNotMatch(element('eventDescription').textContent, /Criterion C/);
+
+// Missing optional metadata hides stale rows and links from the preceding task.
+run(`
+  openSchoolEvent({id:'all-day-event',title:'School assembly',start:'2026-11-26',end:'2026-11-27',
+    allDay:true,description:'',taskDescription:'',taskType:'',className:'',createdBy:'',location:'',url:'',noSchool:false});
+`);
+assert.match(element('eventTime').textContent, /All day/i);
+for(const id of ['eventTaskTypeRow','eventClassRow','eventTeacherRow','eventDescriptionSection','eventTaskLink']){
+  assert.equal(element(id).hidden, true, `${id} should be hidden when absent from the current event`);
+}
+assert.equal(element('eventRoom').hidden, true);
+
+// Calendar descriptions remain text; task URLs cannot execute scripts or carry credentials.
+run("openSchoolEvent({...taskOne, taskDescription:'<script>alert(1)</script>\\nKeep <b>all</b> results.', url:'javascript:alert(1)'});");
+assert.equal(element('eventDescription').textContent, '<script>alert(1)</script>\nKeep <b>all</b> results.');
+assert.doesNotMatch(element('eventDescription').innerHTML, /<script>|<b>/);
+assert.equal(element('eventTaskLink').hidden, true);
+for(const value of [
+  'javascript:alert(1)', 'data:text/html,<script>alert(1)</script>',
+  'https://name:password@example.test/task', 'https://example.test/ta\nsk',
+  'file:///tmp/task', '//example.test/task'
+]){
+  context.unsafeTaskUrl = value;
+  assert.equal(Boolean(run('safeEventUrl(unsafeTaskUrl)')), false, `Unsafe task URL should be rejected: ${JSON.stringify(value)}`);
+}
+assert.equal(run("safeEventUrl('https://share.toddleapp.com/tiny/task')"), 'https://share.toddleapp.com/tiny/task');
+
+// Midnight-crossing task dates come from the exact start/end timestamps.
+run(`
+  openSchoolEvent({...taskTwo,title:'Overnight deadline',start:'2026-11-24',end:'2026-11-26',
+    startTime:'23:30',endTime:'00:30',startDateTime:'2026-11-24T23:30:00+05:30',endDateTime:'2026-11-25T00:30:00+05:30'});
+`);
+assert.match(element('eventDate').textContent, /24 November 2026/);
+assert.match(element('eventDate').textContent, /25 November 2026/);
+assert.match(element('eventTime').textContent, /11:30 PM.*12:30 AM/);
+
+// A stale cache must not invent a time, and class popups must not inherit task details.
+run("openSchoolEvent({id:'legacy',title:'Older cached event',start:'2026-11-24',end:'2026-11-25',noSchool:false});");
+assert.match(element('eventTime').textContent, /not (?:provided|available|supplied)|refresh/i);
+run("eventDialog.close(); openEvent('6','2026-11-02');");
+assert.equal(element('schoolEventDetails').hidden, true);
+assert.equal(element('eventRoom').hidden, false);
+assert.equal(element('deleteEventBtn').hidden, false);

@@ -354,6 +354,7 @@ function renderSchoolEventBar(dates){
       badge.type = 'button';
       badge.className = 'school-event-badge' + (event.noSchool ? ' no-school-badge' : '');
       badge.textContent = (event.noSchool && !/^no\s+school$/i.test(event.title.trim()) ? 'No school · ' : '') + event.title;
+      if(!event.noSchool && event.startTime) badge.textContent = formatTime(event.startTime) + ' · ' + badge.textContent;
       badge.title = badge.textContent;
       badge.dataset.schoolId = event.id;
       cell.appendChild(badge);
@@ -361,23 +362,65 @@ function renderSchoolEventBar(dates){
     bar.appendChild(cell);
   });
 }
-document.getElementById('schoolEventBar').addEventListener('click', event => {
-  const badge = event.target.closest('[data-school-id]');
-  if(!badge) return;
-  const item = schoolCalendar.events.find(entry => entry.id === badge.dataset.schoolId);
-  if(!item) return;
+function safeEventUrl(value){
+  if(typeof value !== 'string') return '';
+  const text = value.trim();
+  if(!/^https?:\/\//i.test(text) || /[\u0000-\u0020\u007f]/.test(text)) return '';
+  try{
+    const parsed = new URL(text);
+    return parsed.hostname && !parsed.username && !parsed.password ? parsed.href : '';
+  }catch(error){ return ''; }
+}
+function renderSchoolTaskDetails(item){
+  document.getElementById('schoolEventDetails').hidden = false;
+  [['eventTaskTypeRow','eventTaskType',item.taskType],
+   ['eventClassRow','eventClassName',item.className],
+   ['eventTeacherRow','eventCreatedBy',item.createdBy]].forEach(([row, field, value]) => {
+    document.getElementById(row).hidden = !value;
+    document.getElementById(field).textContent = value || '';
+  });
+  const hasTaskFields = Boolean(item.taskType || item.className || item.createdBy);
+  const description = hasTaskFields && typeof item.taskDescription === 'string'
+    ? item.taskDescription : item.description || '';
+  document.getElementById('eventDescriptionSection').hidden = !description;
+  document.getElementById('eventDescription').textContent = description;
+  const url = safeEventUrl(item.url);
+  const link = document.getElementById('eventTaskLink');
+  link.hidden = !url;
+  link.removeAttribute('href');
+  if(url) link.setAttribute('href', url);
+  const isToddle = url && /(^|\.)toddleapp\.com$/i.test(new URL(url).hostname);
+  link.textContent = isToddle ? 'View task in Toddle ↗' : 'Open school event ↗';
+  document.getElementById('eventCalendarSource').textContent = isToddle ? 'Toddle · School calendar' : 'School calendar';
+}
+function openSchoolEvent(item){
   selectedEvent = null;
   document.getElementById('deleteEventBtn').hidden = true;
   document.getElementById('eventTitle').textContent = item.title;
   document.getElementById('eventRecurrence').textContent = item.noSchool ? 'School calendar · Student day off' : 'School calendar';
-  const first = localDate(item.start), last = addDays(localDate(item.end), -1);
+  const first = localDate(item.start);
+  const last = item.allDay === false && item.endDateTime
+    ? localDate(item.endDateTime.slice(0,10)) : addDays(localDate(item.end), -1);
   const format = date => date.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
   document.getElementById('eventDate').textContent = format(first) + (dateKey(first) === dateKey(last) ? '' : ' – ' + format(last));
-  document.getElementById('eventTime').textContent = item.noSchool ? 'No school for students · Classes hidden' : 'School event · Normal classes continue';
-  document.getElementById('eventRoom').textContent = item.reason || 'From your school’s subscribed calendar';
-  document.getElementById('eventDialogHint').textContent = 'Updated from your school calendar. Changes made by the school appear on the next refresh. The 10-day cycle still counts weekdays.';
+  let time = item.allDay === true ? 'All day' : 'Time not provided by the school';
+  if(item.startTime) time = formatTime(item.startTime) + (item.endTime ? ' – ' + formatTime(item.endTime) : '');
+  if(item.noSchool) time += ' · No school for students · Classes hidden';
+  document.getElementById('eventTime').textContent = time;
+  document.getElementById('eventRoom').hidden = !item.location;
+  document.getElementById('eventRoom').textContent = item.location || '';
+  renderSchoolTaskDetails(item);
+  document.getElementById('eventDialogHint').textContent = item.noSchool
+    ? 'Updated from your school calendar. Classes are hidden for this date; the 10-day cycle still counts weekdays.'
+    : 'Subscribed from your school calendar. Changes appear when the calendar refreshes.';
   document.getElementById('eventMessage').textContent = '';
   eventDialog.showModal();
+}
+document.getElementById('schoolEventBar').addEventListener('click', event => {
+  const badge = event.target.closest('[data-school-id]');
+  if(!badge) return;
+  const item = schoolCalendar.events.find(entry => entry.id === badge.dataset.schoolId);
+  if(item) openSchoolEvent(item);
 });
 function navigateCalendar(direction){
   viewDate = singleDayView()
@@ -638,6 +681,9 @@ function openEvent(id, key){
   const item = classes.find(c => c.id === id);
   if(!item) return;
   selectedEvent = item;
+  document.getElementById('schoolEventDetails').hidden = true;
+  document.getElementById('eventTaskLink').removeAttribute('href');
+  document.getElementById('eventRoom').hidden = false;
   document.getElementById('deleteEventBtn').hidden = false;
   document.getElementById('eventDialogHint').textContent = 'This is a repeating class. Deleting it removes it from every future repeat.';
   document.getElementById('eventTitle').textContent = item.subject;

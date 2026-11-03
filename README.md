@@ -102,6 +102,12 @@ Non-Student Day, holidays/breaks, PTM/SPTM, and PD/staff-development days show
 cycle continues counting weekdays**, including these days off. Saved classes
 are not deleted. Next up skips days off, including long school breaks.
 
+Click any subscribed task to see its actual start/end time, assessment type,
+class, teacher, description and **View task in Toddle** link when provided by
+the school. This applies to every task in the feed. All-day events are labelled
+accordingly; missing details are left out. Existing subscriptions automatically
+refresh older cached events to include these details without reconnecting.
+
 The feed is checked when you open the timetable if its last check was over an
 hour ago, and hourly while Bellhop is open. **Refresh now** requests an immediate
 update. Failed refreshes preserve the last successful calendar and show a status

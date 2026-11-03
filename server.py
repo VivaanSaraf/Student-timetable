@@ -150,6 +150,16 @@ def calendar_response(row):
     }
 
 
+def calendar_needs_metadata_upgrade(row):
+    """Refresh caches made before event times and descriptions were preserved."""
+    if not row or row["error"]:
+        # A failed upgrade uses the normal hourly retry interval, avoiding a
+        # fresh upstream request every time a student opens their timetable.
+        return False
+    events = json.loads(row["events_json"])
+    return any("allDay" not in event or "description" not in event for event in events)
+
+
 def validate_calendar_timezone(value):
     if not isinstance(value, str) or not 1 <= len(value) <= 64:
         raise ValueError("Choose a valid school calendar time zone.")
@@ -261,7 +271,11 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(401, {"error": "Please log in."})
                 return
             row = calendar_snapshot(username)
-            state = refresh_school_calendar(username, row) if row and row["checked_at"] <= int(time.time()) - CALENDAR_REFRESH_SECONDS else calendar_response(row)
+            needs_refresh = row and (
+                row["checked_at"] <= int(time.time()) - CALENDAR_REFRESH_SECONDS
+                or calendar_needs_metadata_upgrade(row)
+            )
+            state = refresh_school_calendar(username, row) if needs_refresh else calendar_response(row)
             self.send_json(200, state)
             return
         if path.startswith("/api/"):

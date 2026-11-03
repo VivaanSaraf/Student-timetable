@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body class="calendar-app">
 
@@ -171,7 +171,22 @@
 
 <dialog class="tool-dialog event-dialog" id="eventDialog" aria-labelledby="eventTitle">
   <div class="dialog-heading"><div><p class="eyebrow" id="eventRecurrence"></p><h2 id="eventTitle"></h2></div><button type="button" class="icon-btn" data-close="eventDialog" aria-label="Close class details"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
-  <div class="event-detail-body"><p id="eventDate" class="event-detail-row"></p><p id="eventTime" class="event-detail-row"></p><p id="eventRoom" class="event-detail-row"></p><p class="form-help" id="eventDialogHint">This is a repeating class. Deleting it removes it from every future repeat.</p></div>
+  <div class="event-detail-body">
+    <p id="eventDate" class="event-detail-row"></p>
+    <p id="eventTime" class="event-detail-row"></p>
+    <p id="eventRoom" class="event-detail-row"></p>
+    <section id="schoolEventDetails" class="school-event-details" aria-label="School task details" hidden>
+      <dl class="event-task-details">
+        <div id="eventTaskTypeRow" hidden><dt>Task type</dt><dd id="eventTaskType"></dd></div>
+        <div id="eventClassRow" hidden><dt>Class</dt><dd id="eventClassName"></dd></div>
+        <div id="eventTeacherRow" hidden><dt>Created by</dt><dd id="eventCreatedBy"></dd></div>
+      </dl>
+      <div id="eventDescriptionSection" class="event-description-section" hidden><h3>Description</h3><div id="eventDescription" class="event-description"></div></div>
+      <a id="eventTaskLink" class="btn btn-primary event-task-link" target="_blank" rel="noopener noreferrer" hidden>View task in Toddle ↗</a>
+      <p id="eventCalendarSource" class="event-calendar-source">School calendar</p>
+    </section>
+    <p class="form-help" id="eventDialogHint">This is a repeating class. Deleting it removes it from every future repeat.</p>
+  </div>
   <p id="eventMessage" class="import-message" role="status"></p>
   <div class="event-actions"><button type="button" class="btn btn-danger" id="deleteEventBtn">Delete class</button><button type="button" class="btn btn-secondary" data-close="eventDialog">Done</button></div>
 </dialog>
@@ -187,6 +202,6 @@
     <form method="dialog"><button class="btn btn-ghost" id="changeTimeBtn" autofocus>Change time</button></form>
   </div>
 </dialog>
-<script src="script.js?v=15"></script>
+<script src="script.js?v=16"></script>
 </body>
 </html>
