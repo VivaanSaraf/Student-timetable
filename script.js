@@ -82,7 +82,7 @@ async function loadSchedule(){
   modeSelect.disabled = false;
 }
 
-function currentDays(){ return mode === 'cycle' ? CYCLE_DAYS : WEEK_DAYS; }
+function currentDays(){ return mode === 'cycle' ? CYCLE_DAYS : WEEK_DAYS.slice(0,5); }
 function localDate(value){ return new Date(`${value}T12:00:00`); }
 function dateKey(date){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -126,10 +126,10 @@ function singleDayView(){
 function calendarDates(){
   if(singleDayView()){
     let date = addDays(viewDate, 0);
-    if(mode === 'cycle') while(!schoolDay(date)) date = addDays(date, 1);
+    while(!schoolDay(date)) date = addDays(date, 1);
     return [date];
   }
-  if(mode === 'weekly') return Array.from({length:7}, (_, i) => addDays(weekStart(viewDate), i));
+  if(mode === 'weekly') return Array.from({length:5}, (_, i) => addDays(weekStart(viewDate), i));
   let start = addDays(viewDate, 0);
   while(!schoolDay(start)) start = addDays(start, 1);
   const index = CYCLE_DAYS.indexOf(cycleDayFor(start));
@@ -167,7 +167,7 @@ function updateCalendarHeading(dates){
   const hasCycle = classes.some(c => CYCLE_DAYS.includes(c.day));
   document.getElementById('calendarContext').textContent = hasCycle
     ? '10-day school cycle · weekends skipped · cycle days shown below each date'
-    : 'Your weekly classes repeat automatically. Make room for a good week.';
+    : 'Monday–Friday · Your weekly classes repeat automatically.';
 }
 function buildDayUi(){
   dayInput.replaceChildren(new Option('Pick a day', '', true, false));
@@ -235,7 +235,7 @@ function buildCalendar(){
 }
 function navigateCalendar(direction){
   viewDate = singleDayView()
-    ? mode === 'cycle' ? shiftSchoolDays(calendarDates()[0], direction) : addDays(viewDate, direction)
+    ? shiftSchoolDays(calendarDates()[0], direction)
     : addDays(viewDate, direction * (mode === 'cycle' ? 14 : 7));
   buildCalendar();
   render();
@@ -607,6 +607,7 @@ function renderNextUp(){
   let next = null, nextDate = null;
   for(let offset=0; offset<22 && !next; offset++){
     const date = addDays(now, offset);
+    if(!schoolDay(date)) continue;
     next = classesForDate(date).filter(c => offset > 0 || c.end > clock)
       .sort((a,b) => a.start.localeCompare(b.start))[0] || null;
     if(next) nextDate = date;

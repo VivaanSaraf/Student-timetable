@@ -79,7 +79,10 @@ run(`
   mode = 'weekly';
   viewDate = localDate('2026-11-03');
 `);
-assert.deepEqual(dates(), ['2026-11-02','2026-11-03','2026-11-04','2026-11-05','2026-11-06','2026-11-07','2026-11-08']);
+assert.deepEqual(dates(), ['2026-11-02','2026-11-03','2026-11-04','2026-11-05','2026-11-06']);
+assert.deepEqual(plain('currentDays()'), ['Monday','Tuesday','Wednesday','Thursday','Friday']);
+assert.deepEqual(plain('visibleClasses().map(c => c.id)'), ['6','7','8','9','10']);
+assert.equal(run("classes.some(c => c.id === 'weekly' && c.day === 'Saturday')"), true);
 assert.deepEqual(plain("classesForDate(localDate('2026-11-02')).map(c => c.id)"), ['6']);
 assert.deepEqual(plain("classesForDate(localDate('2026-11-07')).map(c => c.id)"), ['weekly']);
 assert.deepEqual(plain("classesForDate(localDate('2026-11-08')).map(c => c.id)"), []);
@@ -126,10 +129,10 @@ assert.deepEqual(headerField('header-month'), ['Oct 2026','Oct 2026','Oct 2026',
 // Calendar headers and navigation use actual dates, including year boundaries.
 run("cycleStart = '2026-10-26'; mode = 'weekly'; viewDate = localDate('2026-11-03'); buildDayUi(); render();");
 assert.deepEqual(plain('Object.keys(dayCols)'), dates());
-assert.deepEqual(headerField('header-weekday'), ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']);
-assert.deepEqual(headerField('header-cycle'), ['Day 6','Day 7','Day 8','Day 9','Day 10','Weekend','Weekend']);
-assert.deepEqual(headerField('header-date'), ['2','3','4','5','6','7','8']);
-assert.deepEqual(headerField('header-month'), Array(7).fill('Nov 2026'));
+assert.deepEqual(headerField('header-weekday'), ['Monday','Tuesday','Wednesday','Thursday','Friday']);
+assert.deepEqual(headerField('header-cycle'), ['Day 6','Day 7','Day 8','Day 9','Day 10']);
+assert.deepEqual(headerField('header-date'), ['2','3','4','5','6']);
+assert.deepEqual(headerField('header-month'), Array(5).fill('Nov 2026'));
 assert.match(element('calendarTitle').textContent, /November/);
 assert.match(element('calendarHeaders').textContent, /Nov/i);
 assert.match(element('calendarHeaders').textContent, /3/);
@@ -139,7 +142,7 @@ run('navigateCalendar(1);');
 assert.equal(dates()[0], '2026-11-02');
 run("viewDate = localDate('2026-12-30'); buildDayUi(); render();");
 assert.equal(dates()[0], '2026-12-28');
-assert.equal(dates()[6], '2027-01-03');
+assert.equal(dates()[4], '2027-01-01');
 assert.match(element('calendarRange').textContent, /2026/);
 assert.match(element('calendarRange').textContent, /2027/);
 await element('todayBtn').fire('click');
@@ -148,6 +151,9 @@ assert.equal(dates()[0], '2026-11-02');
 // Upcoming classes follow real dates even while browsing another week.
 run("viewDate = localDate('2026-12-30'); buildDayUi(); render();");
 assert.match(element('nextUp').textContent, /Subject 7/);
+run("savedClasses = classes; classes = classes.filter(c => c.id === 'weekly'); renderNextUp();");
+assert.match(element('nextUp').textContent, /No upcoming classes/);
+run('classes = savedClasses;');
 run("mode = 'cycle'; viewDate = localDate('2026-11-03'); buildDayUi(); render(); navigateCalendar(1);");
 assert.equal(dates()[0], '2026-11-09');
 run('navigateCalendar(-1);');
@@ -192,6 +198,21 @@ run("viewDate = localDate('2026-12-30'); buildCalendar(); render();");
 await element('todayBtn').fire('click');
 assert.deepEqual(dates(), ['2026-11-03']);
 
+// Weekly mode also skips Saturday/Sunday during daily navigation.
+run("viewDate = localDate('2026-11-06'); buildCalendar(); render();");
+await element('nextWeekBtn').fire('click');
+assert.deepEqual(dates(), ['2026-11-09']);
+assert.deepEqual(headerField('header-weekday'), ['Monday']);
+await element('prevWeekBtn').fire('click');
+assert.deepEqual(dates(), ['2026-11-06']);
+run("viewDate = localDate('2026-11-07'); buildCalendar(); render();");
+assert.deepEqual(dates(), ['2026-11-09']);
+assert.deepEqual(plain('Object.keys(dayCols)'), ['2026-11-09']);
+run("viewDate = localDate('2026-11-08'); buildCalendar(); render();");
+assert.deepEqual(dates(), ['2026-11-09']);
+await element('todayBtn').fire('click');
+assert.deepEqual(dates(), ['2026-11-03']);
+
 // The cycle's single-day view skips weekends and wraps Day 10 to Day 1.
 run("mode = 'cycle'; viewDate = localDate('2026-11-06'); buildCalendar(); render();");
 assert.deepEqual(dates(), ['2026-11-06']);
@@ -225,5 +246,5 @@ narrowScreen.listeners.forEach(callback => callback({matches:false}));
 assert.equal(dates().length, 10);
 assert.equal(plain('Object.keys(dayCols)').length, 10);
 run("mode = 'weekly'; buildCalendar(); render();");
-assert.equal(dates().length, 7);
-assert.equal(plain('Object.keys(dayCols)').length, 7);
+assert.equal(dates().length, 5);
+assert.equal(plain('Object.keys(dayCols)').length, 5);

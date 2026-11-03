@@ -66,8 +66,8 @@ School holidays are not known automatically, so update the Day 1 date after a
 break if your school pauses the cycle. Weekly classes remain saved and appear
 on their actual weekdays. Importing the same classes again skips duplicates.
 
-The calendar fills the screen without a sidebar. **Week** labels each column
-with its weekday, date and month. **10-day cycle** labels each column Day 1–10,
+The calendar fills the screen without a sidebar. **Week** shows Monday–Friday,
+labelling each column with its weekday, date and month. **10-day cycle** labels each column Day 1–10,
 with the matching date, month and weekday. Classes appear at their actual times.
 Use **Today** or the arrows to move between weeks or cycles; **Calendar settings**
 also lets you jump to a date and update Day 1. Imported classes follow the Day 1
@@ -81,8 +81,8 @@ current date regardless of which week you are browsing. **Clear all classes**
 in Calendar settings removes all weekly and cycle classes after confirmation.
 
 On phones, both schedule types show one dated day at a time. Use the day arrows
-or swipe horizontally to move between days. Cycle navigation skips weekends;
-Today returns to the current day (or the next school day in cycle mode).
+or swipe horizontally to move between school days. Both views skip weekends;
+Today returns to the current day (or the next school day on a weekend).
 
 The importer reads selectable text in a PDF and recognizes common layouts with
 Day 1–10 headings and time ranges. Scanned PDFs need OCR first. The uploaded
