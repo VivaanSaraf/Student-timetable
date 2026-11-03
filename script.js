@@ -11,6 +11,7 @@ const dayTabs = document.getElementById('dayTabs');
 const weekGrid = document.getElementById('weekGrid');
 const nextUp = document.getElementById('nextUp');
 const modeSelect = document.getElementById('scheduleMode');
+const cycleWeekSelect = document.getElementById('cycleWeek');
 const cycleStartInput = document.getElementById('cycleStart');
 const settingsMessage = document.getElementById('settingsMessage');
 const pdfFile = document.getElementById('pdfFile');
@@ -72,7 +73,15 @@ async function loadSchedule(){
 }
 
 function currentDays(){ return mode === 'cycle' ? CYCLE_DAYS : WEEK_DAYS; }
-function visibleClasses(){ return classes.filter(c => currentDays().includes(c.day)); }
+function visibleClasses(){
+  if(mode === 'cycle') return classes.filter(c => CYCLE_DAYS.includes(c.day));
+  const firstDay = Number(cycleWeekSelect.value) * 5;
+  return classes.flatMap(c => {
+    if(WEEK_DAYS.includes(c.day)) return [c];
+    const index = CYCLE_DAYS.indexOf(c.day) - firstDay;
+    return index >= 0 && index < 5 ? [{...c, day:WEEK_DAYS[index]}] : [];
+  });
+}
 function localDate(value){ return new Date(`${value}T12:00:00`); }
 function schoolDay(date){ return date.getDay() >= 1 && date.getDay() <= 5; }
 
@@ -104,6 +113,9 @@ function currentDay(){
 
 function buildDayUi(){
   const days = currentDays();
+  const showCycleWeek = mode === 'weekly' && classes.some(c => CYCLE_DAYS.includes(c.day));
+  document.getElementById('cycleWeekField').hidden = !showCycleWeek;
+  document.getElementById('weeklyCycleHint').hidden = !showCycleWeek;
   dayTabs.replaceChildren();
   weekGrid.replaceChildren();
   dayCols = {};
@@ -257,6 +269,8 @@ modeSelect.addEventListener('change', async () => {
   }
 });
 
+cycleWeekSelect.addEventListener('change', render);
+
 cycleStartInput.addEventListener('change', async () => {
   if(!cycleStartInput.value) return;
   try{
@@ -314,10 +328,15 @@ form.addEventListener('submit', async e => {
 
 document.getElementById('clearAllBtn').addEventListener('click', async () => {
   if(!visibleClasses().length) return;
-  if(!confirm('Clear all classes in this timetable? This cannot be undone.')) return;
+  const days = mode === 'cycle' ? CYCLE_DAYS : [
+    ...WEEK_DAYS, ...CYCLE_DAYS.slice(Number(cycleWeekSelect.value) * 5, Number(cycleWeekSelect.value) * 5 + 5)
+  ];
+  if(!confirm(mode === 'cycle' ? 'Clear all classes in this timetable? This cannot be undone.'
+    : 'Clear all weekly classes and the cycle classes shown in this week? This cannot be undone.')) return;
   try{
-    await api('/api/classes/clear', {});
-    classes = classes.filter(c => !currentDays().includes(c.day));
+    await api('/api/classes/clear', {days});
+    classes = classes.filter(c => !days.includes(c.day));
+    buildDayUi();
     render();
   }catch(error){ alert(error.message); }
 });
@@ -328,6 +347,7 @@ weekGrid.addEventListener('click', async e => {
   try{
     await api('/api/classes/delete', {id:btn.dataset.id});
     classes = classes.filter(c => c.id !== btn.dataset.id);
+    buildDayUi();
     render();
   }catch(error){ alert(error.message); }
 });
@@ -359,10 +379,11 @@ function renderClassItem(c, deletable=true){
 
 function render(){
   const today = mode === 'weekly' ? todayName() : cycleDayFor(new Date());
+  const visible = visibleClasses();
   currentDays().forEach(day => {
     const col = dayCols[day];
     col.el.classList.toggle('is-today', day === today);
-    const items = classes.filter(c => c.day === day).sort((a,b) => a.start.localeCompare(b.start));
+    const items = visible.filter(c => c.day === day).sort((a,b) => a.start.localeCompare(b.start));
     col.list.replaceChildren();
     if(items.length) items.forEach(item => col.list.appendChild(renderClassItem(item)));
     else {
@@ -376,27 +397,19 @@ function render(){
 }
 
 function renderNextUp(){
-  const items = visibleClasses();
+  // Upcoming classes follow actual dates, regardless of the selected view/week.
+  const items = classes;
   if(!items.length){ nextUp.textContent = 'Add some classes to see what\'s next.'; return; }
   const now = new Date();
   const clock = now.toTimeString().slice(0,5);
   let next = null;
-  if(mode === 'cycle'){
-    for(let offset=0; offset<22 && !next; offset++){
-      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
-      date.setDate(date.getDate()+offset);
-      const day = cycleDayFor(date);
-      if(!day) continue;
-      next = items.filter(c => c.day === day && (offset > 0 || c.start > clock))
-        .sort((a,b) => a.start.localeCompare(b.start))[0] || null;
-    }
-  }else{
-    const todayIndex = WEEK_DAYS.indexOf(todayName());
-    next = items.map(c => {
-      let distance = (WEEK_DAYS.indexOf(c.day) - todayIndex + 7) % 7;
-      if(distance === 0 && c.start <= clock) distance = 7;
-      return {c, distance};
-    }).sort((a,b) => a.distance - b.distance || a.c.start.localeCompare(b.c.start))[0]?.c;
+  for(let offset=0; offset<22 && !next; offset++){
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+    date.setDate(date.getDate()+offset);
+    const cycleDay = cycleDayFor(date);
+    const weekday = WEEK_DAYS[(date.getDay() + 6) % 7];
+    next = items.filter(c => (c.day === cycleDay || c.day === weekday) && (offset > 0 || c.start > clock))
+      .sort((a,b) => a.start.localeCompare(b.start))[0] || null;
   }
   nextUp.replaceChildren();
   if(next) nextUp.appendChild(renderClassItem(next, false));

@@ -66,6 +66,12 @@ School holidays are not known automatically, so update the Day 1 date after a
 break if your school pauses the cycle. Weekly classes remain saved in the
 Weekly view. Importing the same classes again skips duplicates.
 
+In Weekly view, imported cycle classes appear Monday–Friday: **Week 1** shows
+Days 1–5 and **Week 2** shows Days 6–10. Use the **Cycle week** selector to switch
+between them. This changes the display; imported classes still repeat every 10
+school days, and the next class follows the Day 1 date. Clear all in Weekly view
+removes weekly classes and the five cycle days selected in that view.
+
 The importer reads selectable text in a PDF and recognizes common layouts with
 Day 1–10 headings and time ranges. Scanned PDFs need OCR first. The uploaded
 file is read for the preview and is not saved to disk.

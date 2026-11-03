@@ -128,12 +128,20 @@
           <option value="cycle">10-day cycle</option>
         </select>
       </div>
+      <div class="field" id="cycleWeekField" hidden>
+        <label for="cycleWeek">Cycle week</label>
+        <select id="cycleWeek" aria-describedby="weeklyCycleHint">
+          <option value="0">Week 1 · Days 1–5</option>
+          <option value="1">Week 2 · Days 6–10</option>
+        </select>
+      </div>
       <div class="field">
         <label for="cycleStart">Date of Day 1</label>
         <input id="cycleStart" type="date" aria-describedby="cycleHint">
       </div>
       <p id="cycleHint">The cycle skips weekends. Set a new Day 1 after school holidays.</p>
     </div>
+    <p id="weeklyCycleHint" class="form-help" hidden>Week 1 shows Days 1–5 from Monday to Friday. Week 2 shows Days 6–10. Classes still repeat every 10 school days.</p>
     <p id="settingsMessage" class="import-message" role="status"></p>
 
     <div class="day-tabs" id="dayTabs"></div>

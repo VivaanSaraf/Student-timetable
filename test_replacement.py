@@ -61,6 +61,23 @@ class ReplacementTests(unittest.TestCase):
     def saved(self):
         return self.request('/api/classes')[1]['classes']
 
+    def test_clear_week_preserves_other_cycle_week(self):
+        self.add(self.item('weekly'))
+        self.request('/api/classes/import-cycle', {
+            'cycleStart': '2026-10-26',
+            'classes': [self.item('first-week', day='Day 1'), self.item('second-week', day='Day 6')]})
+        self.request('/api/settings', {'mode': 'weekly'})
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
+                'Saturday', 'Sunday', 'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5']
+        self.assertEqual(self.request('/api/classes/clear', {'days': days})[0], 200)
+        self.assertEqual([row['id'] for row in self.saved()], ['second-week'])
+
+    def test_clear_rejects_invalid_days_without_removing_classes(self):
+        self.add(self.item('kept'))
+        for days in ([], 'Monday', ['Day 11'], [{}]):
+            self.assertEqual(self.request('/api/classes/clear', {'days': days})[0], 400)
+            self.assertEqual([row['id'] for row in self.saved()], ['kept'])
+
     def test_replace_multiple_preserves_unrelated(self):
         first, second = self.item('first'), self.item('second', '10:00', '11:00')
         touching, other_day = self.item('touching', '11:00', '12:00'), self.item('other-day', day='Tuesday')

@@ -414,7 +414,9 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(200, {"ok": True})
             elif path == "/api/classes/clear":
                 mode = db.execute("SELECT schedule_mode FROM users WHERE username = ?", (username,)).fetchone()["schedule_mode"]
-                days = CYCLE_DAYS if mode == "cycle" else WEEK_DAYS
+                days = data.get("days", list(CYCLE_DAYS if mode == "cycle" else WEEK_DAYS))
+                if not isinstance(days, list) or not days or any(not isinstance(day, str) or day not in DAYS for day in days):
+                    raise ValueError("Choose valid timetable days to clear.")
                 db.executemany("DELETE FROM classes WHERE username = ? AND day = ?",
                                ((username, day) for day in days))
                 db.execute("UPDATE users SET legacy_import_done = 1 WHERE username = ?", (username,))
