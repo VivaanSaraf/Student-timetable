@@ -87,3 +87,36 @@ Today returns to the current day (or the next school day on a weekend).
 The importer reads selectable text in a PDF and recognizes common layouts with
 Day 1–10 headings and time ranges. Scanned PDFs need OCR first. The uploaded
 file is read for the preview and is not saved to disk.
+
+## Subscribe to a school calendar
+
+Open **Calendar settings → School calendar** and paste your school's private
+HTTPS or `webcal://` iCalendar (`.ics`) subscription link, then choose **Connect
+school calendar**. Each account has its own subscription. The full link stays
+in the private database and is never returned in timetable responses or
+included in public assets. Do not commit subscription links or tokens.
+
+School events appear in a row below the date headings. Explicit No School,
+Non-Student Day, holidays/breaks, PTM/SPTM, and PD/staff-development days show
+**No school** and hide repeating classes for the affected dates. The **10-day
+cycle continues counting weekdays**, including these days off. Saved classes
+are not deleted. Next up skips days off, including long school breaks.
+
+The feed is checked when you open the timetable if its last check was over an
+hour ago, and hourly while Bellhop is open. **Refresh now** requests an immediate
+update. Failed refreshes preserve the last successful calendar and show a status
+message. **Change link** replaces a subscription only after the new feed is
+successfully fetched and parsed. **Disconnect** restores the normal timetable.
+These controls affect only the signed-in student's account.
+
+iCalendar recurrence, exceptions, cancellations, all-day exclusive end dates,
+and event time zones are handled by the calendar parser. School dates use
+Asia/Kolkata. Feeds include roughly the previous year through the next 18 months;
+a refresh moves this window forward. Only explicit day-off titles suppress
+classes; assignments, normal school events and ambiguous labels stay visible
+without cancelling lessons. Feed dates and labels must be correct at source.
+
+To run regressions, install `requirements.txt`, then run
+`python -m unittest -q test_replacement.py test_school_calendar.py test_school_calendar_api.py`.
+JavaScript regressions are `node test_weekly.mjs` and
+`node test_school_calendar_frontend.mjs`.

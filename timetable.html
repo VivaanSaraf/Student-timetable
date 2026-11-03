@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body class="calendar-app">
 
@@ -40,6 +40,7 @@
     <div class="calendar-scroll" id="calendarScroll" tabindex="0" aria-label="Calendar time grid. Scroll to see more times or days.">
       <div class="calendar-canvas" id="calendarCanvas">
         <div class="calendar-day-headers" id="calendarHeaders"></div>
+        <div class="school-event-bar" id="schoolEventBar" aria-label="School calendar events" hidden></div>
         <div class="calendar-timeline" id="calendarTimeline"><div class="time-gutter" id="timeGutter" aria-hidden="true"></div><div id="weekGrid" class="week-grid"></div></div>
       </div>
     </div>
@@ -143,6 +144,22 @@
 
 <dialog class="tool-dialog settings-dialog" id="settingsDialog" aria-labelledby="settings-heading">
   <div class="dialog-heading"><div><h2 id="settings-heading">Calendar settings</h2><p>Keep your calendar in step with school.</p></div><button type="button" class="icon-btn" data-close="settingsDialog" aria-label="Close settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
+  <section class="school-calendar-settings" aria-labelledby="school-calendar-heading">
+    <h3 id="school-calendar-heading">School calendar</h3>
+    <p class="form-help">Subscribe with your school’s private iCalendar (.ics) link. Holidays, non-student days, PTM/SPTM and PD days hide classes. Your 10-day cycle still counts weekdays.</p>
+    <p id="schoolCalendarStatus" class="school-calendar-status" role="status">No school calendar connected.</p>
+    <form id="schoolCalendarForm">
+      <div class="field"><label for="schoolCalendarUrl">Private calendar subscription link</label><input type="url" id="schoolCalendarUrl" placeholder="https://…/calendar.ics" autocomplete="off" spellcheck="false" maxlength="8192" required aria-describedby="schoolCalendarPrivacy"><p class="form-help" id="schoolCalendarPrivacy">Saved privately to your account. The link is never shown on your timetable or shared with other students.</p></div>
+      <button class="btn btn-primary" id="connectSchoolCalendarBtn" type="submit">Connect school calendar</button>
+    </form>
+    <div class="school-calendar-actions" id="schoolCalendarActions" hidden>
+      <button class="btn btn-secondary" id="refreshSchoolCalendarBtn" type="button">Refresh now</button>
+      <button class="btn btn-ghost" id="changeSchoolCalendarBtn" type="button">Change link</button>
+      <button class="btn btn-ghost" id="disconnectSchoolCalendarBtn" type="button">Disconnect</button>
+    </div>
+    <p id="schoolCalendarMessage" class="import-message" role="alert"></p>
+    <p class="form-help school-sync-help">Checks for updates hourly while you use Bellhop. If a refresh fails, your last synced calendar stays available.</p>
+  </section>
   <div class="field"><label for="jumpDate">Go to a date</label><input type="date" id="jumpDate"><p class="form-help">Jump straight to any week in your timetable.</p></div>
   <form id="cycleSettingsForm">
     <div class="field"><label for="cycleStart">Date of Day 1</label><input type="date" id="cycleStart" required aria-describedby="cycleHint"><p class="form-help" id="cycleHint">The 10-day cycle skips weekends. Reset Day 1 after a school holiday if your cycle pauses.</p></div>
@@ -154,7 +171,7 @@
 
 <dialog class="tool-dialog event-dialog" id="eventDialog" aria-labelledby="eventTitle">
   <div class="dialog-heading"><div><p class="eyebrow" id="eventRecurrence"></p><h2 id="eventTitle"></h2></div><button type="button" class="icon-btn" data-close="eventDialog" aria-label="Close class details"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
-  <div class="event-detail-body"><p id="eventDate" class="event-detail-row"></p><p id="eventTime" class="event-detail-row"></p><p id="eventRoom" class="event-detail-row"></p><p class="form-help">This is a repeating class. Deleting it removes it from every future repeat.</p></div>
+  <div class="event-detail-body"><p id="eventDate" class="event-detail-row"></p><p id="eventTime" class="event-detail-row"></p><p id="eventRoom" class="event-detail-row"></p><p class="form-help" id="eventDialogHint">This is a repeating class. Deleting it removes it from every future repeat.</p></div>
   <p id="eventMessage" class="import-message" role="status"></p>
   <div class="event-actions"><button type="button" class="btn btn-danger" id="deleteEventBtn">Delete class</button><button type="button" class="btn btn-secondary" data-close="eventDialog">Done</button></div>
 </dialog>
@@ -170,6 +187,6 @@
     <form method="dialog"><button class="btn btn-ghost" id="changeTimeBtn" autofocus>Change time</button></form>
   </div>
 </dialog>
-<script src="script.js?v=13"></script>
+<script src="script.js?v=15"></script>
 </body>
 </html>

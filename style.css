@@ -308,3 +308,38 @@ input[type=file]::file-selector-button{font:inherit;background:#2a2a2a;border:0;
   .preview-actions .btn:first-child{flex-basis:100%;}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;}}
+
+/* A private school feed adds day-off notices without changing Bellhop's theme. */
+:root{--calendar-header-height:118px;}
+.calendar-day-headers{height:var(--calendar-header-height);min-height:var(--calendar-header-height);}
+.school-event-bar{display:grid;grid-template-columns:64px repeat(var(--day-count),minmax(0,1fr));position:sticky;top:var(--calendar-header-height);z-index:5;min-height:34px;max-height:106px;overflow-y:auto;background:var(--panel);border-bottom:1px solid var(--border);scrollbar-width:thin;}
+.school-bar-label{font-size:9px;color:var(--white-dim);display:flex;justify-content:center;align-items:center;padding:8px 3px;}
+.school-day-events{padding:5px 3px;display:flex;flex-direction:column;gap:4px;min-width:0;border-left:1px solid var(--border);}
+.school-event-badge{background:var(--panel-2);color:var(--white);border:1px solid var(--green-dim);border-radius:5px;text-align:left;font-size:10px;line-height:1.5;padding:3px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;}
+.school-event-badge:hover{border-color:var(--green);}
+.no-school-badge{border-color:var(--red-dim);color:var(--red);background:rgba(255,77,94,.08);}
+.no-school-badge:hover{border-color:var(--red);}
+.day-col.no-school-day{background-color:rgba(255,77,94,.035);}
+.holiday-overlay{position:absolute;left:8px;right:8px;top:calc(var(--hour-height) + 18px);padding:15px 9px;border:1px solid var(--red-dim);border-radius:10px;background:var(--panel);text-align:center;pointer-events:none;}
+.holiday-overlay strong{font-family:'Space Grotesk',sans-serif;font-size:18px;color:var(--red);}
+.holiday-overlay p{font-size:11px;color:var(--white-dim);line-height:1.6;margin-top:8px;overflow-wrap:anywhere;}
+.holiday-overlay .form-help{font-size:10px;}
+.school-calendar-settings{border:1px solid var(--green-dim);border-radius:12px;padding:16px;margin-bottom:24px;}
+.school-calendar-settings h3{font-size:17px;margin-bottom:9px;}
+.settings-dialog .school-calendar-settings .form-help{margin:0 0 12px;}
+.school-calendar-status{font-size:11px;color:var(--green);line-height:1.6;margin:12px 0;}
+.school-calendar-settings input{font-size:11px;}
+.school-calendar-settings .btn{font-size:11px;min-height:34px;padding:8px 10px;}
+.school-calendar-actions{display:flex;flex-wrap:wrap;gap:7px;}
+#schoolCalendarMessage{overflow-wrap:anywhere;color:var(--red);}
+.settings-dialog .school-calendar-settings .school-sync-help{font-size:10px;margin-top:12px;margin-bottom:0;}
+@media(min-width:1700px){:root{--calendar-header-height:128px;}}
+@media(max-width:760px){
+  :root{--calendar-header-height:112px;}
+  .school-event-bar{grid-template-columns:54px repeat(var(--day-count),minmax(0,1fr));}
+  .school-event-badge{font-size:11px;}
+  .holiday-overlay{left:14px;right:14px;padding:22px 14px;}
+  .holiday-overlay strong{font-size:24px;}
+  .holiday-overlay p{font-size:13px;}
+  .school-calendar-settings{padding:13px;}
+}

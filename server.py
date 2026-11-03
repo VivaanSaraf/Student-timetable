@@ -14,10 +14,12 @@ from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pdf_import import extract_pdf_classes, suggest_day_one
 from image_import import extract_image_timetable
 from storage import database, initialize_database, INTEGRITY_ERRORS
+from school_calendar import normalize_feed_url, fetch_calendar, parse_school_events
 
 
 ROOT = Path(__file__).resolve().parent
@@ -31,6 +33,8 @@ CYCLE_DAYS = {f"Day {n}" for n in range(1, 11)}
 DAYS = WEEK_DAYS | CYCLE_DAYS
 COLORS = {"green", "red", "white"}
 SESSION_SECONDS = 12 * 60 * 60
+CALENDAR_REFRESH_SECONDS = 60 * 60
+CALENDAR_REFRESH_ERROR = "Could not refresh the school calendar. Your last synced events are still available. Try again later."
 PUBLIC_FILES = {
     "index.html", "timetable.html", "login.html", "style.css", "landing.css",
     "login.css", "script.js", "landing.js", "login.js", "session-ui.js",
@@ -128,6 +132,57 @@ def user_classes(db, username):
     )]
 
 
+def calendar_snapshot(username):
+    with database() as db:
+        row = db.execute("SELECT * FROM school_calendars WHERE username = ?", (username,)).fetchone()
+        return dict(row) if row else None
+
+
+def calendar_response(row):
+    """Expose calendar data, never the token-bearing subscription URL."""
+    return {
+        "connected": row is not None,
+        "events": json.loads(row["events_json"]) if row else [],
+        "lastSynced": row["synced_at"] if row else None,
+        "error": row["error"] or None if row else None,
+        "source": "School calendar",
+        "timezone": row["timezone"] if row else "Asia/Kolkata",
+    }
+
+
+def validate_calendar_timezone(value):
+    if not isinstance(value, str) or not 1 <= len(value) <= 64:
+        raise ValueError("Choose a valid school calendar time zone.")
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError("Choose a valid school calendar time zone.") from None
+    return value
+
+
+def refresh_school_calendar(username, row=None):
+    row = row or calendar_snapshot(username)
+    if row is None:
+        return calendar_response(None)
+    checked_at = int(time.time())
+    try:
+        events = parse_school_events(fetch_calendar(row["feed_url"]), timezone=row["timezone"])
+    except Exception:
+        # Feed and network errors may contain the private URL. Return a fixed message.
+        with database() as db:
+            db.execute("UPDATE school_calendars SET checked_at = ?, error = ?, revision = ? "
+                       "WHERE username = ? AND revision = ?",
+                       (checked_at, CALENDAR_REFRESH_ERROR, secrets.token_hex(16), username, row["revision"]))
+            db.commit()
+    else:
+        with database() as db:
+            db.execute("UPDATE school_calendars SET events_json = ?, synced_at = ?, checked_at = ?, "
+                       "error = '', revision = ? WHERE username = ? AND revision = ?",
+                       (json.dumps(events), checked_at, checked_at, secrets.token_hex(16), username, row["revision"]))
+            db.commit()
+    return calendar_response(calendar_snapshot(username))
+
+
 class Handler(SimpleHTTPRequestHandler):
     def setup(self):
         super().setup()
@@ -197,6 +252,17 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/health":
             self.send_json(200, {"ok": True})
+            return
+        if path == "/api/school-calendar":
+            with database() as db:
+                user = self.current_user(db)
+                username = user["username"] if user else None
+            if username is None:
+                self.send_json(401, {"error": "Please log in."})
+                return
+            row = calendar_snapshot(username)
+            state = refresh_school_calendar(username, row) if row and row["checked_at"] <= int(time.time()) - CALENDAR_REFRESH_SECONDS else calendar_response(row)
+            self.send_json(200, state)
             return
         if path.startswith("/api/"):
             with database() as db:
@@ -287,6 +353,9 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json(409, {"error": "That account or class already exists. Try again."})
 
     def handle_api(self, path, data):
+        if path.startswith("/api/school-calendar/"):
+            self.handle_school_calendar(path, data)
+            return
         now = int(time.time())
         with database() as db:
             if path in ("/api/signup", "/api/login", "/api/migrate"):
@@ -474,6 +543,41 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(200, {"imported": len(new_classes), "skipped": len(classes) - len(new_classes), "replaced": len(replaced)})
             else:
                 self.send_json(404, {"error": "Not found."})
+
+    def handle_school_calendar(self, path, data):
+        with database() as db:
+            user = self.current_user(db)
+            username = user["username"] if user else None
+        if username is None:
+            self.send_json(401, {"error": "Please log in."})
+            return
+        if path == "/api/school-calendar/subscribe":
+            url = normalize_feed_url(data.get("url"))
+            timezone = validate_calendar_timezone(data.get("timezone", "Asia/Kolkata"))
+            try:
+                events = parse_school_events(fetch_calendar(url), timezone=timezone)
+            except Exception:
+                raise ValueError("Could not read that school calendar. Check the subscription link and try again.") from None
+            now = int(time.time())
+            with database() as db:
+                db.execute("INSERT INTO school_calendars "
+                           "(username, feed_url, timezone, events_json, synced_at, checked_at, error, revision) "
+                           "VALUES (?, ?, ?, ?, ?, ?, '', ?) ON CONFLICT (username) DO UPDATE SET "
+                           "feed_url = excluded.feed_url, timezone = excluded.timezone, "
+                           "events_json = excluded.events_json, synced_at = excluded.synced_at, "
+                           "checked_at = excluded.checked_at, error = '', revision = excluded.revision",
+                           (username, url, timezone, json.dumps(events), now, now, secrets.token_hex(16)))
+                db.commit()
+            self.send_json(200, calendar_response(calendar_snapshot(username)))
+        elif path == "/api/school-calendar/refresh":
+            self.send_json(200, refresh_school_calendar(username))
+        elif path == "/api/school-calendar/disconnect":
+            with database() as db:
+                db.execute("DELETE FROM school_calendars WHERE username = ?", (username,))
+                db.commit()
+            self.send_json(200, calendar_response(None))
+        else:
+            self.send_json(404, {"error": "Not found."})
 
 
 if __name__ == "__main__":

@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS classes (
     color TEXT NOT NULL,
     PRIMARY KEY (username, id)
 );
+CREATE TABLE IF NOT EXISTS school_calendars (
+    username TEXT PRIMARY KEY REFERENCES users(username),
+    feed_url TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    events_json TEXT NOT NULL,
+    synced_at BIGINT NOT NULL,
+    checked_at BIGINT NOT NULL,
+    error TEXT NOT NULL DEFAULT '',
+    revision TEXT NOT NULL
+);
 """
 
 

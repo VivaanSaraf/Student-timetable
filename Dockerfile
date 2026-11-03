@@ -7,7 +7,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY server.py storage.py pdf_import.py image_import.py ./
+COPY server.py storage.py pdf_import.py image_import.py school_calendar.py ./
 COPY *.html *.css *.js ./
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

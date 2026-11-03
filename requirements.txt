@@ -1,2 +1,4 @@
 psycopg[binary]==3.3.6
 Pillow==12.3.0
+icalendar==7.3.0
+recurring-ical-events==3.8.2

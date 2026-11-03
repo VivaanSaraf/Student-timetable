@@ -49,6 +49,8 @@ let gridEnd = 18 * 60;
 const HOUR_HEIGHT = 104;
 let selectedColor = 'green';
 let dayCols = {};
+let schoolCalendar = {connected:false, events:[], lastSynced:null, error:null};
+let schoolCalendarBusy = false;
 
 async function api(path, body){
   const response = await fetch(path, {
@@ -69,6 +71,7 @@ async function api(path, body){
 }
 
 async function loadSchedule(){
+  const calendarPromise = loadSchoolCalendar();
   const response = await fetch('/api/classes', {credentials:'same-origin'});
   if(!response.ok) throw new Error('Could not load your timetable.');
   const data = await response.json();
@@ -77,10 +80,103 @@ async function loadSchedule(){
   cycleStart = data.cycleStart || '';
   modeSelect.value = mode;
   cycleStartInput.value = cycleStart;
+  await calendarPromise;
   buildDayUi();
   render();
   modeSelect.disabled = false;
 }
+
+function setSchoolCalendarState(data){
+  schoolCalendar = {
+    connected:data.connected === true,
+    events:Array.isArray(data.events) ? data.events : [],
+    lastSynced:data.lastSynced || null,
+    error:data.error || null
+  };
+  const connected = schoolCalendar.connected;
+  document.getElementById('schoolCalendarActions').hidden = !connected;
+  document.getElementById('schoolCalendarForm').hidden = connected;
+  const stamp = schoolCalendar.lastSynced
+    ? new Date(schoolCalendar.lastSynced * 1000).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'numeric', minute:'2-digit'}) : '';
+  document.getElementById('schoolCalendarStatus').textContent = connected
+    ? `Connected · ${schoolCalendar.events.length} school events${stamp ? ' · Last synced ' + stamp : ''}`
+    : 'No school calendar connected.';
+  document.getElementById('schoolCalendarMessage').textContent = schoolCalendar.error || '';
+}
+async function loadSchoolCalendar(){
+  try{
+    const response = await fetch('/api/school-calendar', {credentials:'same-origin'});
+    if(!response.ok) throw new Error();
+    const data = await response.json();
+    setSchoolCalendarState(data);
+  }catch(error){
+    document.getElementById('schoolCalendarMessage').textContent = 'Could not check the school calendar. Your timetable and last synced events are still available. Try Refresh now.';
+  }
+}
+function schoolEventsForDate(date){
+  if(!schoolCalendar.connected) return [];
+  const key = dateKey(date);
+  return schoolCalendar.events.filter(event => event.start <= key && key < event.end);
+}
+function noSchoolEventsForDate(date){ return schoolEventsForDate(date).filter(event => event.noSchool); }
+function dayOffTitles(events){
+  const named = events.filter(event => !/^no\s+school$/i.test(event.title.trim()));
+  return [...new Set((named.length ? named : events).map(event => event.title))];
+}
+function setSchoolCalendarBusy(busy){
+  schoolCalendarBusy = busy;
+  ['connectSchoolCalendarBtn','refreshSchoolCalendarBtn','changeSchoolCalendarBtn','disconnectSchoolCalendarBtn']
+    .forEach(id => { document.getElementById(id).disabled = busy; });
+}
+document.getElementById('schoolCalendarForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if(schoolCalendarBusy) return;
+  const input = document.getElementById('schoolCalendarUrl');
+  const message = document.getElementById('schoolCalendarMessage');
+  const button = document.getElementById('connectSchoolCalendarBtn');
+  setSchoolCalendarBusy(true);
+  button.textContent = 'Connecting…';
+  message.textContent = '';
+  try{
+    const data = await api('/api/school-calendar/subscribe', {url:input.value.trim(), timezone:'Asia/Kolkata'});
+    input.value = '';
+    setSchoolCalendarState(data);
+    buildCalendar();
+    render();
+    settingsMessage.textContent = 'School calendar connected. Holidays, PTM/SPTM and PD days now hide classes.';
+  }catch(error){ message.textContent = error.message; }
+  finally{ setSchoolCalendarBusy(false); button.textContent = 'Connect school calendar'; }
+});
+document.getElementById('refreshSchoolCalendarBtn').addEventListener('click', async () => {
+  if(schoolCalendarBusy) return;
+  const button = document.getElementById('refreshSchoolCalendarBtn');
+  setSchoolCalendarBusy(true);
+  button.textContent = 'Refreshing…';
+  try{
+    const data = await api('/api/school-calendar/refresh', {});
+    setSchoolCalendarState(data);
+    buildCalendar();
+    render();
+    if(!data.error) document.getElementById('schoolCalendarMessage').textContent = 'School calendar is up to date.';
+  }catch(error){ document.getElementById('schoolCalendarMessage').textContent = error.message; }
+  finally{ setSchoolCalendarBusy(false); button.textContent = 'Refresh now'; }
+});
+document.getElementById('changeSchoolCalendarBtn').addEventListener('click', () => {
+  document.getElementById('schoolCalendarForm').hidden = false;
+  document.getElementById('schoolCalendarUrl').focus();
+});
+document.getElementById('disconnectSchoolCalendarBtn').addEventListener('click', async () => {
+  if(schoolCalendarBusy) return;
+  setSchoolCalendarBusy(true);
+  try{
+    setSchoolCalendarState(await api('/api/school-calendar/disconnect', {}));
+    document.getElementById('schoolCalendarUrl').value = '';
+    buildCalendar();
+    render();
+    settingsMessage.textContent = 'School calendar disconnected. Your saved classes are unchanged.';
+  }catch(error){ document.getElementById('schoolCalendarMessage').textContent = error.message; }
+  finally{ setSchoolCalendarBusy(false); }
+});
 
 function currentDays(){ return mode === 'cycle' ? CYCLE_DAYS : WEEK_DAYS.slice(0,5); }
 function localDate(value){ return new Date(`${value}T12:00:00`); }
@@ -137,6 +233,7 @@ function calendarDates(){
   return Array.from({length:10}, (_, i) => shiftSchoolDays(start, i));
 }
 function classesForDate(date){
+  if(noSchoolEventsForDate(date).length) return [];
   const cycleDay = cycleDayFor(date);
   return classes.filter(c => c.day === weekdayName(date) || c.day === cycleDay);
 }
@@ -168,6 +265,9 @@ function updateCalendarHeading(dates){
   document.getElementById('calendarContext').textContent = hasCycle
     ? '10-day school cycle · weekends skipped · cycle days shown below each date'
     : 'Monday–Friday · Your weekly classes repeat automatically.';
+  if(schoolCalendar.connected){
+    document.getElementById('calendarContext').textContent += ' · School calendar connected';
+  }
 }
 function buildDayUi(){
   dayInput.replaceChildren(new Option('Pick a day', '', true, false));
@@ -231,8 +331,54 @@ function buildCalendar(){
     weekGrid.appendChild(col);
     dayCols[key] = {el:col, list, date};
   });
+  renderSchoolEventBar(dates);
   updateCalendarHeading(dates);
 }
+function renderSchoolEventBar(dates){
+  const bar = document.getElementById('schoolEventBar');
+  bar.replaceChildren();
+  bar.hidden = !schoolCalendar.connected;
+  if(bar.hidden) return;
+  const corner = document.createElement('div');
+  corner.className = 'school-bar-label';
+  corner.textContent = 'School';
+  bar.appendChild(corner);
+  dates.forEach(date => {
+    const cell = document.createElement('div');
+    cell.className = 'school-day-events';
+    const events = schoolEventsForDate(date);
+    const hasNamedDayOff = events.some(event => event.noSchool && !/^no\s+school$/i.test(event.title.trim()));
+    events.filter(event => !(hasNamedDayOff && event.noSchool && /^no\s+school$/i.test(event.title.trim())))
+      .sort((a,b) => Number(b.noSchool)-Number(a.noSchool)).forEach(event => {
+      const badge = document.createElement('button');
+      badge.type = 'button';
+      badge.className = 'school-event-badge' + (event.noSchool ? ' no-school-badge' : '');
+      badge.textContent = (event.noSchool && !/^no\s+school$/i.test(event.title.trim()) ? 'No school · ' : '') + event.title;
+      badge.title = badge.textContent;
+      badge.dataset.schoolId = event.id;
+      cell.appendChild(badge);
+    });
+    bar.appendChild(cell);
+  });
+}
+document.getElementById('schoolEventBar').addEventListener('click', event => {
+  const badge = event.target.closest('[data-school-id]');
+  if(!badge) return;
+  const item = schoolCalendar.events.find(entry => entry.id === badge.dataset.schoolId);
+  if(!item) return;
+  selectedEvent = null;
+  document.getElementById('deleteEventBtn').hidden = true;
+  document.getElementById('eventTitle').textContent = item.title;
+  document.getElementById('eventRecurrence').textContent = item.noSchool ? 'School calendar · Student day off' : 'School calendar';
+  const first = localDate(item.start), last = addDays(localDate(item.end), -1);
+  const format = date => date.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  document.getElementById('eventDate').textContent = format(first) + (dateKey(first) === dateKey(last) ? '' : ' – ' + format(last));
+  document.getElementById('eventTime').textContent = item.noSchool ? 'No school for students · Classes hidden' : 'School event · Normal classes continue';
+  document.getElementById('eventRoom').textContent = item.reason || 'From your school’s subscribed calendar';
+  document.getElementById('eventDialogHint').textContent = 'Updated from your school calendar. Changes made by the school appear on the next refresh. The 10-day cycle still counts weekdays.';
+  document.getElementById('eventMessage').textContent = '';
+  eventDialog.showModal();
+});
 function navigateCalendar(direction){
   viewDate = singleDayView()
     ? shiftSchoolDays(calendarDates()[0], direction)
@@ -281,6 +427,10 @@ document.getElementById('openClassBtn').addEventListener('click', () => openClas
 document.getElementById('openImportBtn').addEventListener('click', () => importDialog.showModal());
 document.getElementById('openSettingsBtn').addEventListener('click', () => settingsDialog.showModal());
 function openClass(date = null, minutes = 9 * 60){
+  if(date && noSchoolEventsForDate(date).length){
+    settingsMessage.textContent = 'No school for students on this date. Repeating classes are hidden.';
+    return;
+  }
   classMessage.textContent = '';
   if(date){
     dayInput.value = mode === 'cycle' ? cycleDayFor(date) || '' : weekdayName(date);
@@ -488,6 +638,8 @@ function openEvent(id, key){
   const item = classes.find(c => c.id === id);
   if(!item) return;
   selectedEvent = item;
+  document.getElementById('deleteEventBtn').hidden = false;
+  document.getElementById('eventDialogHint').textContent = 'This is a repeating class. Deleting it removes it from every future repeat.';
   document.getElementById('eventTitle').textContent = item.subject;
   document.getElementById('eventRecurrence').textContent = CYCLE_DAYS.includes(item.day)
     ? `${item.day} · repeats every 10 school days` : `${item.day} · repeats weekly`;
@@ -574,6 +726,8 @@ function render(){
   const now = new Date();
   Object.entries(dayCols).forEach(([key, col]) => {
     col.list.replaceChildren();
+    const holidays = noSchoolEventsForDate(col.date);
+    col.el.classList.toggle('no-school-day', holidays.length > 0);
     const items = classesForDate(col.date).filter(c => !query || `${c.subject} ${c.room}`.toLowerCase().includes(query));
     layoutEvents(items).forEach(({item, lane, lanes}) => {
       const card = renderClassItem(item, col.date);
@@ -583,7 +737,19 @@ function render(){
       card.style.width = `calc(${100 / lanes}% - 6px)`;
       col.list.appendChild(card);
     });
-    if(!items.length){
+    if(holidays.length){
+      const overlay = document.createElement('div');
+      overlay.className = 'holiday-overlay';
+      const heading = document.createElement('strong');
+      heading.textContent = 'No school';
+      const names = document.createElement('p');
+      names.textContent = dayOffTitles(holidays).join(' · ');
+      const hint = document.createElement('p');
+      hint.textContent = 'Student day off · Classes hidden';
+      hint.className = 'form-help';
+      overlay.append(heading, names, hint);
+      col.list.appendChild(overlay);
+    }else if(!items.length){
       const empty = document.createElement('p');
       empty.className = 'day-col-empty';
       empty.textContent = query ? 'No matches' : 'No classes';
@@ -605,7 +771,7 @@ function renderNextUp(){
   const now = new Date();
   const clock = now.toTimeString().slice(0,5);
   let next = null, nextDate = null;
-  for(let offset=0; offset<22 && !next; offset++){
+  for(let offset=0; offset<370 && !next; offset++){
     const date = addDays(now, offset);
     if(!schoolDay(date)) continue;
     next = classesForDate(date).filter(c => offset > 0 || c.end > clock)
@@ -763,6 +929,12 @@ async function start(){
     document.getElementById('userGreet').textContent = session.name;
     await loadSchedule();
     scrollToSchoolStart();
+    setInterval(async () => {
+      if(document.hidden || schoolCalendarBusy) return;
+      await loadSchoolCalendar();
+      buildCalendar();
+      render();
+    }, 3600000);
     setInterval(() => {
       if(document.hidden) return;
       buildCalendar();
