@@ -62,9 +62,9 @@ the day labels and class times, and crop unrelated content. Small or blurry
 text may be misread, so check the preview carefully. Edit or remove
 any row and add missing ones before importing. Set the date that was **Day 1**
 on the calendar; the cycle advances on weekdays and repeats after Day 10.
-Connect a school calendar to pause the cycle automatically during breaks of
-one full school week (5 consecutive weekdays) or longer. Shorter holidays still
-count towards the cycle. Without a connected calendar, update the Day 1 date
+Connect a school calendar to skip complete Monday–Friday holiday weeks
+automatically. Holidays in partial weeks still count towards the cycle, even
+when they are part of a longer break. Without a connected calendar, update the Day 1 date
 manually after a break if needed. Weekly classes remain saved and appear
 on their actual weekdays. Importing the same classes again skips duplicates.
 
@@ -101,10 +101,13 @@ included in public assets. Do not commit subscription links or tokens.
 School events appear in a row below the date headings. Explicit No School,
 Non-Student Day, holidays/breaks, PTM/SPTM, and PD/staff-development days show
 **No school** and hide repeating classes for the affected dates. The **10-day
-cycle pauses during breaks of 5 consecutive weekdays or longer** (one full
-school week), continuing from the next cycle day when school resumes. For
+cycle skips only complete Monday–Friday holiday weeks**, preserving the
+weekday alignment of the Day 1 anchor. For
 example, Friday Day 10 followed by a holiday week resumes on Monday Day 1.
-Shorter holidays still count as cycle weekdays. Overlapping or adjacent day-off
+Holidays in partial weeks still count as cycle weekdays, including at the
+start or end of a longer break. For example, if a break starts on Wednesday
+Day 8 and includes all of the following week, the next Monday is Day 1;
+the partial Wednesday–Friday still counts as Days 8–10. Overlapping or adjacent day-off
 entries combine into a single break, including across weekends; a school day
 between holidays separates them. Saved classes are not deleted. Next up skips
 days off, including long school breaks. The cycle view skips paused dates to

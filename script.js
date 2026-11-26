@@ -222,7 +222,14 @@ function longSchoolBreaks(){
       if(range.end > previous.end) previous.end = range.end;
     }else merged.push(range);
   });
-  return merged.filter(range => weekdaysBetween(range.start, range.end) >= 5);
+  // Only complete Monday–Friday holiday weeks pause the cycle. Partial weeks
+  // still advance, so a midweek break cannot shift the weekday/day alignment.
+  return merged.flatMap(range => {
+    const monday = weekStart(range.start);
+    const start = range.start.getDay() === 1 ? monday : addDays(monday, 7);
+    const end = weekStart(range.end);
+    return start < end ? [{start, end}] : [];
+  });
 }
 function cyclePaused(date){
   return cycleBreaks.some(range => range.start <= date && date < range.end);
@@ -446,7 +453,7 @@ function openSchoolEvent(item){
   document.getElementById('eventRoom').textContent = item.location || '';
   renderSchoolTaskDetails(item);
   document.getElementById('eventDialogHint').textContent = item.noSchool
-    ? 'Updated from your school calendar. Classes are hidden for this date. The 10-day cycle pauses for breaks of 5 consecutive weekdays or longer; shorter breaks still count.'
+    ? 'Updated from your school calendar. Classes are hidden for this date. The 10-day cycle skips complete Monday–Friday holiday weeks; holidays in partial weeks still count.'
     : 'Subscribed from your school calendar. Changes appear when the calendar refreshes.';
   document.getElementById('eventMessage').textContent = '';
   eventDialog.showModal();

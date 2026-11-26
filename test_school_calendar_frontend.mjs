@@ -124,7 +124,7 @@ assert.equal(element('deleteEventBtn').hidden, true);
 assert.equal(run('selectedEvent'), null);
 assert.equal(element('eventTitle').textContent, 'Diwali Holiday');
 assert.match(element('eventTime').textContent, /No school for students/);
-assert.match(element('eventDialogHint').textContent, /pauses for breaks of 5 consecutive weekdays or longer; shorter breaks still count/);
+assert.match(element('eventDialogHint').textContent, /skips complete Monday–Friday holiday weeks; holidays in partial weeks still count/);
 run("eventDialog.close(); openEvent('6', '2026-11-02');");
 assert.equal(element('deleteEventBtn').hidden, false);
 assert.equal(run('selectedEvent.id'), '6');
@@ -147,8 +147,8 @@ assert.match(element('nextUp').textContent, /Subject 10/);
 // A long school break still finds the next real class beyond the old 22-day lookahead.
 run("setSchoolCalendarState({connected:true,events:[{id:'long-break',title:'Winter vacation',start:'2026-11-03',end:'2026-12-15',noSchool:true}],lastSynced:1793664000,error:null}); renderNextUp();");
 assert.match(element('nextUp').textContent, /15 Dec/);
-assert.match(element('nextUp').textContent, /Subject 7/);
-assert.equal(run("cycleDayFor(localDate('2026-12-15'))"), 'Day 7');
+assert.match(element('nextUp').textContent, /Subject 2/);
+assert.equal(run("cycleDayFor(localDate('2026-12-15'))"), 'Day 2');
 
 function setBreaks(events){
   run(`setSchoolCalendarState({connected:true,events:${JSON.stringify(events)},lastSynced:1793664000,error:null});`);
@@ -202,25 +202,52 @@ assert.equal(run('cycleBreaks.length'), 1);
 assert.equal(run("cycleDayFor(localDate('2026-11-16'))"), 'Day 1');
 assert.equal(run("cycleDayFor(localDate('2026-11-23'))"), 'Day 6');
 
-// A break can cross weekends or start midweek; it resumes rather than resetting Day 1.
+// Five consecutive days off across partial weeks do not pause a calendar week.
 setBreaks([breakEvent('2026-11-06', '2026-11-07'), breakEvent('2026-11-09', '2026-11-13')]);
-assert.equal(run("cycleDayFor(localDate('2026-11-13'))"), 'Day 10');
+assert.equal(run('cycleBreaks.length'), 0);
+assert.equal(run("cycleDayFor(localDate('2026-11-13'))"), 'Day 5');
 setBreaks([breakEvent('2026-11-04', '2026-11-11')]);
-assert.equal(run("cycleDayFor(localDate('2026-11-11'))"), 'Day 8');
+assert.equal(run('cycleBreaks.length'), 0);
+assert.equal(run("cycleDayFor(localDate('2026-11-11'))"), 'Day 3');
 run("mode = 'cycle'; viewDate = localDate('2026-11-12'); buildCalendar();");
 assert.deepEqual(headerField('header-weekday'), Array.from({length:10}, (_, i) => `Day ${i + 1}`));
 assert.ok(dates().includes('2026-11-11'));
-assert.ok(!dates().includes('2026-11-04'));
+assert.equal(dates()[0], '2026-11-09');
 
 // A school day between two short holidays prevents them becoming a long break.
 setBreaks([breakEvent('2026-11-09', '2026-11-11'), breakEvent('2026-11-12', '2026-11-17')]);
 assert.equal(run('cycleBreaks.length'), 0);
 assert.equal(run("cycleDayFor(localDate('2026-11-17'))"), 'Day 7');
 
-// Longer breaks pause every affected weekday, and multiple breaks accumulate.
+// Longer breaks skip their full weeks, with the trailing partial weeks counted.
 setBreaks([breakEvent('2026-11-09', '2026-11-24'), breakEvent('2026-11-30', '2026-12-05')]);
-assert.equal(run("cycleDayFor(localDate('2026-11-24'))"), 'Day 1');
-assert.equal(run("cycleDayFor(localDate('2026-12-07'))"), 'Day 5');
+assert.equal(run("cycleDayFor(localDate('2026-11-24'))"), 'Day 2');
+assert.equal(run("cycleDayFor(localDate('2026-12-07'))"), 'Day 6');
+
+// Observed in Toddle: March 19 Day 10, spring break March 22–26, March 29 Day 1.
+run("cycleStart = '2027-03-08';");
+setBreaks([breakEvent('2027-03-22', '2027-03-27'), breakEvent('2027-04-07', '2027-04-08')]);
+for(const [date, expected] of [
+  ['2027-03-15','Day 6'], ['2027-03-19','Day 10'],
+  ['2027-03-29','Day 1'], ['2027-04-02','Day 5'],
+  ['2027-04-05','Day 6'], ['2027-04-08','Day 9'], ['2027-04-09','Day 10']
+]) assert.equal(run(`cycleDayFor(localDate('${date}'))`), expected);
+assert.equal(run("classesForDate(localDate('2027-03-22')).length"), 0);
+
+// Starting on Wednesday Day 8 must not turn the returning Monday into Day 8/9.
+setBreaks([breakEvent('2027-03-17', '2027-03-29')]);
+assert.equal(run("cycleDayFor(localDate('2027-03-16'))"), 'Day 7');
+assert.equal(run("cycleDayFor(localDate('2027-03-29'))"), 'Day 1');
+assert.deepEqual(plain("classesForDate(localDate('2027-03-29')).map(c => c.id)"), ['1']);
+assert.equal(run("cycleDayFor(localDate('2027-04-05'))"), 'Day 6');
+run("mode = 'cycle'; viewDate = localDate('2027-03-29'); buildCalendar();");
+assert.deepEqual(headerField('header-weekday'), Array.from({length:10}, (_, i) => `Day ${i + 1}`));
+assert.deepEqual(headerField('header-cycle'), ['Monday','Tuesday','Wednesday','Thursday','Friday',
+  'Monday','Tuesday','Wednesday','Thursday','Friday']);
+
+// A break ending midweek must also preserve the weekday and cycle-day pairing.
+setBreaks([breakEvent('2027-03-17', '2027-03-31')]);
+assert.equal(run("cycleDayFor(localDate('2027-03-31'))"), 'Day 3');
 
 // An anchor after a holiday still resolves earlier dates correctly.
 setBreaks([breakEvent('2026-11-09', '2026-11-14')]);
