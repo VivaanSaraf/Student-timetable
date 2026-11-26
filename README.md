@@ -62,8 +62,10 @@ the day labels and class times, and crop unrelated content. Small or blurry
 text may be misread, so check the preview carefully. Edit or remove
 any row and add missing ones before importing. Set the date that was **Day 1**
 on the calendar; the cycle advances on weekdays and repeats after Day 10.
-School holidays are not known automatically, so update the Day 1 date after a
-break if your school pauses the cycle. Weekly classes remain saved and appear
+Connect a school calendar to pause the cycle automatically during breaks of
+one full school week (5 consecutive weekdays) or longer. Shorter holidays still
+count towards the cycle. Without a connected calendar, update the Day 1 date
+manually after a break if needed. Weekly classes remain saved and appear
 on their actual weekdays. Importing the same classes again skips duplicates.
 
 The calendar fills the screen without a sidebar. **Week** shows Monday–Friday,
@@ -99,8 +101,14 @@ included in public assets. Do not commit subscription links or tokens.
 School events appear in a row below the date headings. Explicit No School,
 Non-Student Day, holidays/breaks, PTM/SPTM, and PD/staff-development days show
 **No school** and hide repeating classes for the affected dates. The **10-day
-cycle continues counting weekdays**, including these days off. Saved classes
-are not deleted. Next up skips days off, including long school breaks.
+cycle pauses during breaks of 5 consecutive weekdays or longer** (one full
+school week), continuing from the next cycle day when school resumes. For
+example, Friday Day 10 followed by a holiday week resumes on Monday Day 1.
+Shorter holidays still count as cycle weekdays. Overlapping or adjacent day-off
+entries combine into a single break, including across weekends; a school day
+between holidays separates them. Saved classes are not deleted. Next up skips
+days off, including long school breaks. The cycle view skips paused dates to
+keep its ten cycle days aligned; the weekly view still displays the holidays.
 
 Click any subscribed task to see its actual start/end time, assessment type,
 class, teacher, description and **View task in Toddle** link when provided by

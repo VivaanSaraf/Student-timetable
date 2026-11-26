@@ -50,6 +50,7 @@ const HOUR_HEIGHT = 104;
 let selectedColor = 'green';
 let dayCols = {};
 let schoolCalendar = {connected:false, events:[], lastSynced:null, error:null};
+let cycleBreaks = [];
 let schoolCalendarBusy = false;
 
 async function api(path, body){
@@ -93,6 +94,7 @@ function setSchoolCalendarState(data){
     lastSynced:data.lastSynced || null,
     error:data.error || null
   };
+  cycleBreaks = longSchoolBreaks();
   const connected = schoolCalendar.connected;
   document.getElementById('schoolCalendarActions').hidden = !connected;
   document.getElementById('schoolCalendarForm').hidden = connected;
@@ -191,12 +193,46 @@ function addDays(date, offset){
 function weekStart(date){ return addDays(date, -((date.getDay() + 6) % 7)); }
 function schoolDay(date){ return date.getDay() >= 1 && date.getDay() <= 5; }
 function weekdayName(date){ return WEEK_DAYS[(date.getDay() + 6) % 7]; }
-function shiftSchoolDays(date, offset){
+// Count weekdays in [start, end), using calendar dates rather than elapsed hours.
+function weekdaysBetween(start, end){
+  if(end < start) return -weekdaysBetween(end, start);
+  const utcDay = value => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / 86400000;
+  const difference = utcDay(end) - utcDay(start);
+  const wholeWeeks = Math.floor(difference / 7);
+  let count = wholeWeeks * 5;
+  for(let i = 0; i < difference % 7; i++){
+    if(schoolDay(addDays(start, wholeWeeks * 7 + i))) count++;
+  }
+  return count;
+}
+function longSchoolBreaks(){
+  if(!schoolCalendar.connected) return [];
+  const ranges = schoolCalendar.events.filter(event => event.noSchool).flatMap(event => {
+    let start = localDate(event.start), end = localDate(event.end);
+    if(!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return [];
+    // Weekend boundaries meet at Monday, so separate daily events can form one break.
+    while(!schoolDay(start)) start = addDays(start, 1);
+    while(!schoolDay(end)) end = addDays(end, 1);
+    return start < end ? [{start, end}] : [];
+  }).sort((a, b) => a.start - b.start);
+  const merged = [];
+  ranges.forEach(range => {
+    const previous = merged[merged.length - 1];
+    if(previous && range.start <= previous.end){
+      if(range.end > previous.end) previous.end = range.end;
+    }else merged.push(range);
+  });
+  return merged.filter(range => weekdaysBetween(range.start, range.end) >= 5);
+}
+function cyclePaused(date){
+  return cycleBreaks.some(range => range.start <= date && date < range.end);
+}
+function shiftSchoolDays(date, offset, skipBreaks = false){
   let result = addDays(date, 0);
   const sign = Math.sign(offset);
   for(let remaining = Math.abs(offset); remaining;){
     result = addDays(result, sign);
-    if(schoolDay(result)) remaining--;
+    if(schoolDay(result) && !(skipBreaks && cyclePaused(result))) remaining--;
   }
   return result;
 }
@@ -204,16 +240,15 @@ function cycleDayFor(date){
   if(!cycleStart || !schoolDay(date)) return null;
   const anchor = localDate(cycleStart);
   if(!Number.isFinite(anchor.getTime()) || !schoolDay(anchor)) return null;
-  const utcDay = value => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / 86400000;
-  const difference = utcDay(date) - utcDay(anchor);
-  const sign = Math.sign(difference);
-  const wholeWeeks = Math.floor(Math.abs(difference) / 7);
-  let offset = wholeWeeks * 5 * sign;
-  let cursor = addDays(anchor, wholeWeeks * 7 * sign);
-  for(let i = 0; i < Math.abs(difference) % 7; i++){
-    cursor = addDays(cursor, sign);
-    if(schoolDay(cursor)) offset += sign;
-  }
+  let offset = weekdaysBetween(anchor, date);
+  const sign = Math.sign(offset);
+  const first = date < anchor ? date : anchor;
+  const last = date < anchor ? anchor : date;
+  cycleBreaks.forEach(range => {
+    const start = range.start > first ? range.start : first;
+    const end = range.end < last ? range.end : last;
+    if(start < end) offset -= sign * weekdaysBetween(start, end);
+  });
   return CYCLE_DAYS[((offset % 10) + 10) % 10];
 }
 function singleDayView(){
@@ -227,10 +262,10 @@ function calendarDates(){
   }
   if(mode === 'weekly') return Array.from({length:5}, (_, i) => addDays(weekStart(viewDate), i));
   let start = addDays(viewDate, 0);
-  while(!schoolDay(start)) start = addDays(start, 1);
+  while(!schoolDay(start) || cyclePaused(start)) start = addDays(start, 1);
   const index = CYCLE_DAYS.indexOf(cycleDayFor(start));
-  start = shiftSchoolDays(start, -Math.max(index, 0));
-  return Array.from({length:10}, (_, i) => shiftSchoolDays(start, i));
+  start = shiftSchoolDays(start, -Math.max(index, 0), true);
+  return Array.from({length:10}, (_, i) => shiftSchoolDays(start, i, true));
 }
 function classesForDate(date){
   if(noSchoolEventsForDate(date).length) return [];
@@ -411,7 +446,7 @@ function openSchoolEvent(item){
   document.getElementById('eventRoom').textContent = item.location || '';
   renderSchoolTaskDetails(item);
   document.getElementById('eventDialogHint').textContent = item.noSchool
-    ? 'Updated from your school calendar. Classes are hidden for this date; the 10-day cycle still counts weekdays.'
+    ? 'Updated from your school calendar. Classes are hidden for this date. The 10-day cycle pauses for breaks of 5 consecutive weekdays or longer; shorter breaks still count.'
     : 'Subscribed from your school calendar. Changes appear when the calendar refreshes.';
   document.getElementById('eventMessage').textContent = '';
   eventDialog.showModal();
@@ -425,7 +460,8 @@ document.getElementById('schoolEventBar').addEventListener('click', event => {
 function navigateCalendar(direction){
   viewDate = singleDayView()
     ? shiftSchoolDays(calendarDates()[0], direction)
-    : addDays(viewDate, direction * (mode === 'cycle' ? 14 : 7));
+    : mode === 'cycle' ? shiftSchoolDays(calendarDates()[0], direction * 10, true)
+    : addDays(viewDate, direction * 7);
   buildCalendar();
   render();
 }
