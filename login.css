@@ -1,3 +1,26 @@
+.login-page{
+  display:flex;
+  flex-direction:column;
+  min-height:100dvh;
+}
+
+.login-page .site-header{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items:center;
+  gap:16px;
+  padding:24px clamp(20px, 4vw, 56px);
+}
+
+.login-page .header-center{text-align:center;}
+.login-page .brand{justify-content:center;}
+.login-page .tagline{
+  margin-top:6px;
+  color:var(--white-dim);
+  font-size:13px;
+}
+.login-page .dot-red{color:var(--red);}
+
 .login-shell{
   flex:1;
   display:flex;
@@ -92,6 +115,12 @@
 }
 
 @media (max-width:480px){
+  .login-page .site-header{
+    grid-template-columns:auto 1fr;
+    padding:20px 16px;
+  }
+  .login-page .header-center{justify-self:end;}
+  .login-page .header-side-right{display:none;}
   .login-shell{padding:28px 16px 40px;}
   .login-card{padding:24px 18px;}
 }
